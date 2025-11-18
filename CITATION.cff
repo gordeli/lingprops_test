@@ -1,0 +1,44 @@
+cff-version: 1.2.0
+message: "If you use lingprops in your research, please cite these works."
+title: "lingprops: Linguistic property utilities (concreteness, etc.)"
+version: "0.1.0"
+authors:
+  - family-names: "Your"
+    given-names: "Name"
+preferred-citation:
+  type: software
+  authors:
+    - family-names: "Your"
+      given-names: "Name"
+  title: "lingprops"
+  version: "0.1.0"
+  date-released: 2025-11-18
+references:
+  - type: article
+    title: "Been There, Done That: How Episodic and Semantic Memory Affects the Language of Authentic and Fictitious Reviews"
+    authors:
+      - family-names: "Kronrod"
+        given-names: "Ann"
+      - family-names: "Gordeliy"
+        given-names: "Ivan"
+      - family-names: "Lee"
+        given-names: "Jeffrey K"
+    journal: "Journal of Consumer Research"
+    volume: "50"
+    issue: "2"
+    start: "405"
+    end: "425"
+    year: 2023
+    doi: "10.1093/jcr/ucac056"
+  - type: report
+    title: "Detecting fictitious consumer reviews: A theory-driven approach combining automated text analysis and experimental design"
+    authors:
+      - family-names: "Kronrod"
+        given-names: "Ann"
+      - family-names: "Lee"
+        given-names: "Jeffrey K."
+      - family-names: "Gordeliy"
+        given-names: "Ivan"
+    institution: "Marketing Science Institute"
+    year: 2017
+    number: "17-124"

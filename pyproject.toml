@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lingprops"
+version = "0.1.0"
+description = "Linguistic property utilities (concreteness, etc.)"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "LICENSE" }
+authors = [{ name = "Your Name" }]
+keywords = ["nlp", "linguistics", "concreteness", "wordnet", "nltk"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+    "numpy>=1.22",
+    "scipy>=1.9",
+    "nltk>=3.8",
+    "tqdm>=4.60",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourname/lingprops"
+Issues = "https://github.com/yourname/lingprops/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = ["tests*"]
