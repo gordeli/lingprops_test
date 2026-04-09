@@ -1,0 +1,79 @@
+REPETITION ANALYSIS LOG
+=======================
+Generated: 2026-04-09
+
+======================================================================
+REPETITION ANALYSIS: How word frequency affects concreteness
+======================================================================
+
+Formula: conc += log(C(depth + frequency, frequency))
+where C(n,k) is the binomial coefficient, depth is WordNet hypernym depth,
+and frequency is the word occurrence count.
+
+--- For a word with hypernym depth = 5 ---
+
+ freq |       C(d+f, f) |   log(C(d+f,f)) |   normalized |     marginal
+----------------------------------------------------------------------
+    1 |             6.0 |        1.791759 |     1.791759 |     1.791759
+    2 |            21.0 |        3.044522 |     1.522261 |     1.252763
+    3 |            56.0 |        4.025352 |     1.341784 |     0.980829
+    5 |           252.0 |        5.529429 |     1.105886 |     1.504077
+   10 |          3003.0 |        8.007367 |     0.800737 |     2.477938
+   20 |         53130.0 |       10.880497 |     0.544025 |     2.873130
+   50 |       3478761.0 |       15.062187 |     0.301244 |     4.181690
+
+
+LIMITING CASES
+==============
+
+Case 1: Single occurrence (frequency=1)
+  log(C(depth + 1, 1)) = log(depth + 1)
+  depth= 1: log(2) = 0.693147
+  depth= 3: log(4) = 1.386294
+  depth= 5: log(6) = 1.791759
+  depth= 8: log(9) = 2.197225
+  depth=12: log(13) = 2.564949
+
+Case 2: Many repetitions (frequency >> depth)
+  log(C(depth + f, f)) ~ depth * log(f) for large f
+  depth=5, freq=  10: exact=8.0074, depth*log(f)=11.5129, ratio=0.6955
+  depth=5, freq= 100: exact=18.3857, depth*log(f)=23.0259, ratio=0.7985
+  depth=5, freq=1000: exact=29.7663, depth*log(f)=34.5388, ratio=0.8618
+
+Case 3: Very deep word (depth >> frequency)
+  log(C(depth + f, f)) ~ f * log(depth) for large depth
+  depth= 10, freq=2: exact=4.1897, f*log(d)=4.6052, ratio=0.9098
+  depth= 50, freq=2: exact=7.1899, f*log(d)=7.8240, ratio=0.9190
+  depth=100, freq=2: exact=8.5469, f*log(d)=9.2103, ratio=0.9280
+
+
+NORMALIZATION IMPACT
+====================
+
+Example: "cat" (depth~7) appearing 1, 2, 3, 5 times
+Each repetition increases both the numerator (score) AND denominator (count)
+
+ freq |    raw score |   norm count |   normalized
+-------------------------------------------------------
+    1 |     2.079442 |            1 |     2.079442
+    2 |     3.583519 |            2 |     1.791759
+    3 |     4.787492 |            3 |     1.595831
+    5 |     6.674561 |            5 |     1.334912
+   10 |     9.875500 |           10 |     0.987550
+
+KEY INSIGHT: Normalized score DECREASES with repetitions.
+Repeating the same word yields diminishing returns per-word.
+This is because log(C(d+f,f))/f is a monotonically decreasing function of f.
+
+
+PRACTICAL EXAMPLES
+==================
+
+"cat":               total score=2.6391, count=1, normalized=2.6391
+"cat cat cat":       total score=6.3279, count=3, normalized=2.1093
+"cat dog mouse":     total score=7.9121, count=3, normalized=2.6374
+"cat dog":           total score=5.3471, count=2, normalized=2.6736
+"cat cat":           total score=4.6540, count=2, normalized=2.3270
+
+Observation: "cat dog" (normalized=2.6736) > "cat cat" (normalized=2.3270)
+Diverse vocabulary yields higher normalized concreteness than repetition.

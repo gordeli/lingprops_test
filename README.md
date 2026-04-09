@@ -9,10 +9,13 @@ Utilities for computing linguistic properties of text in Python — starting wit
 ---
 
 ## ✨ Features
-- Clean API: `compute_concreteness(text, ...)` with per-POS and total scores
-- Robust NLTK resource bootstrap via `ensure_nltk_data()` (handles different NLTK model names)
+- Clean API: `compute_concreteness(text)` — per-POS and total scores, with and without repetitions, computed in a single call
+- `count_words(text)` — standalone word counts by POS category
+- POS independence: nouns, verbs, adjectives, and adverbs are scored as fully separate partitions (frequencies and deduplication are within-POS only)
+- Normalized concreteness: raw score divided by the count of words with non-zero contribution
+- Robust NLTK resource bootstrap via `ensure_nltk_data()`
 - Command-line interface: `python -m lingprops.scripts.concreteness_cli --text "..."`
-- Tests and GitHub Actions CI included
+- Tests included
 
 ---
 
@@ -72,17 +75,44 @@ This fetches: `wordnet`, `omw-1.4`, `punkt` (and `punkt_tab` if available), `ave
 
 ### Python
 ```python
-from lingprops import compute_concreteness, ensure_nltk_data
+from lingprops import compute_concreteness, count_words
 
-ensure_nltk_data()
-text = "Cats chase mice. Dogs sleep."
-print(compute_concreteness(text))
+r = compute_concreteness("The cat chased the cat quickly.")
+
+# --- With repetitions (each token counts with its frequency) ---
+r["NN"]["score"]              # raw log-combinatorial sum for nouns
+r["NN"]["count"]              # normalization count (tokens with non-zero concreteness)
+r["NN"]["normalized_score"]   # score / count
+
+# --- Without repetitions (unique lemmas only, f=1) ---
+r["NN"]["score_norep"]
+r["NN"]["count_norep"]
+r["NN"]["normalized_score_norep"]
+
+# --- Total across all POS ---
+r["total"]["normalized_score"]        # with repetitions
+r["total"]["normalized_score_norep"]  # without repetitions
+r["total"]["word_count"]              # all tokens in text
+r["total"]["content_word_counts"]     # {"NN": .., "VB": .., "JJ": .., "RB": .., "CD": ..}
+
+# --- Standalone word counts ---
+count_words("The cat chased the cat quickly.")
+# {"NN": 2, "VB": 1, "JJ": 0, "RB": 1, "CD": 0, "total": 7}
 ```
+
+Same fields (`score`, `count`, `normalized_score`, `score_norep`, `count_norep`,
+`normalized_score_norep`) are available for each POS key: `"NN"`, `"VB"`, `"JJ"`,
+`"RB"`, `"CD"`, and `"total"`.
+
+**Design:** Each POS category is computed independently — word frequencies and
+lemma deduplication are strictly within-POS. The no-repetitions mode deduplicates
+by lemma (before nounification): "cats" and "cat" are one lemma; "big" and "large"
+are two.
 
 ### CLI
 ```bash
 python -m lingprops.scripts.concreteness_cli --text "Cats chase mice. Dogs sleep."
-python -m lingprops.scripts.concreteness_cli --file README.md --no-repetitions
+python -m lingprops.scripts.concreteness_cli --file review.txt
 ```
 
 ---
