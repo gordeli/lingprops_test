@@ -5,9 +5,13 @@ provide a clean, documented function here.
 """
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Tuple
+
+from . import wsd as _wsd
 
 DEFAULT_POS_GROUPS: Tuple[str, ...] = ("NN", "VB", "JJ", "RB", "CD")
+DEFAULT_WSD: str = "first"
+WSD_CHOICES: Tuple[str, ...] = ("first", "lesk", "neural")
 
 # Mapping from POS group labels to the Penn Treebank tag prefixes they cover
 _POS_TAG_PREFIXES: Dict[str, List[str]] = {
@@ -110,8 +114,22 @@ def _tag_to_wn_pos(tag: str):
     return None
 
 
+def _resolve_depth(lemma: str, POS: str, legacy,
+                   picker: Optional[Callable], context, text):
+    """Compute noun depth via the configured WSD picker.
+
+    When ``picker`` is ``None`` (equivalent to the ``"first"`` strategy),
+    delegate to the legacy ``hyp_num`` to preserve the exact original code
+    path.  Proper nouns (``NNP``) always use the legacy path.
+    """
+    if picker is None or POS == 'NNP':
+        return legacy.hyp_num(lemma, POS)
+    synset = picker(lemma, POS, context=context, text=text)
+    return _wsd.depth_from_synset(synset, POS)
+
+
 def _score_wordform(wordform, word_forms, nouns, frequency, exclusion_list,
-                    legacy):
+                    legacy, picker=None, context=None, text=None):
     """Score a single wordform.  Returns (conc_delta, valid)."""
     import numpy as np
     from scipy.special import comb
@@ -129,7 +147,8 @@ def _score_wordform(wordform, word_forms, nouns, frequency, exclusion_list,
     if isinstance(noun, list):
         for n in noun:
             try:
-                depth = legacy.hyp_num(n, wordform[1])
+                depth = _resolve_depth(n, wordform[1], legacy,
+                                       picker, context, text)
             except Exception:
                 continue
             if len(n) < 2 or (depth == 0 and n != "entity"):
@@ -138,7 +157,8 @@ def _score_wordform(wordform, word_forms, nouns, frequency, exclusion_list,
             valid = True
     else:
         try:
-            depth = legacy.hyp_num(noun, wordform[1])
+            depth = _resolve_depth(noun, wordform[1], legacy,
+                                   picker, context, text)
             if wordform[0] in ("gameplay", "ios", "pt") or \
                "smartophone" in wordform[0]:
                 depth += 1
@@ -153,7 +173,8 @@ def _score_wordform(wordform, word_forms, nouns, frequency, exclusion_list,
 
 
 def _compute_pos_score(word_forms, nouns, postag_prefixes,
-                       exclusion_list, legacy):
+                       exclusion_list, legacy,
+                       picker=None, context=None, text=None):
     """Compute concreteness for a single POS partition — WITH repetitions.
 
     Returns (score, normalization_count).
@@ -167,6 +188,7 @@ def _compute_pos_score(word_forms, nouns, postag_prefixes,
         frequency = word_forms[wordform]
         delta, valid = _score_wordform(
             wordform, word_forms, nouns, frequency, exclusion_list, legacy,
+            picker=picker, context=context, text=text,
         )
         if valid:
             conc += delta
@@ -176,7 +198,8 @@ def _compute_pos_score(word_forms, nouns, postag_prefixes,
 
 
 def _compute_pos_score_norep(word_forms, nouns, postag_prefixes,
-                             exclusion_list, legacy):
+                             exclusion_list, legacy,
+                             picker=None, context=None, text=None):
     """Compute concreteness for a single POS partition — WITHOUT repetitions.
 
     Deduplication is by **lemma** (before nounification), strictly within
@@ -203,6 +226,7 @@ def _compute_pos_score_norep(word_forms, nouns, postag_prefixes,
         frequency = 1  # unique-word mode
         delta, valid = _score_wordform(
             wordform, word_forms, nouns, frequency, exclusion_list, legacy,
+            picker=picker, context=context, text=text,
         )
         if valid:
             conc += delta
@@ -215,6 +239,7 @@ def compute_concreteness(
     text: str,
     pos_groups: Iterable[str] = DEFAULT_POS_GROUPS,
     exclude: Iterable[str] = (),
+    wsd: str = DEFAULT_WSD,
 ) -> Dict[str, Dict[str, float]]:
     """Compute concreteness metrics for a text.
 
@@ -239,6 +264,14 @@ def compute_concreteness(
         POS prefixes to include.
     exclude : iterable of str, default ()
         Words to exclude from calculation.
+    wsd : {"first", "lesk", "neural"}, default "first"
+        Word-sense disambiguation strategy used to pick the WordNet synset
+        when computing noun depth.  ``"first"`` reproduces the library's
+        original (context-free) behaviour.  ``"lesk"`` uses Lesk
+        gloss-overlap with a Most-Frequent-Sense fallback.  ``"neural"``
+        uses a sentence-transformer to match the context against each
+        candidate gloss (requires ``pip install lingprops[neural]``).
+        See :mod:`lingprops.wsd` for details and benchmark numbers.
 
     Returns
     -------
@@ -260,6 +293,16 @@ def compute_concreteness(
     word_forms = legacy.wordformtion(text)
     nouns, _ = legacy.noun_lemmas(word_forms)
 
+    # WSD setup: `None` picker means "use legacy hyp_num" (the first-synset
+    # path), which keeps the original code path bit-exact for the default.
+    if wsd == DEFAULT_WSD:
+        picker = None
+        context_tokens = None
+    else:
+        picker = _wsd.get_picker(wsd)
+        import nltk
+        context_tokens = nltk.word_tokenize(text) if text else []
+
     exclude_list = list(exclude)
     results: Dict[str, Dict[str, float]] = {}
     total_score = 0.0
@@ -274,6 +317,7 @@ def compute_concreteness(
         # With repetitions
         score, count = _compute_pos_score(
             word_forms, nouns, prefixes, exclude_list, legacy,
+            picker=picker, context=context_tokens, text=text,
         )
         s = float(score or 0.0)
         c = int(count or 0)
@@ -281,6 +325,7 @@ def compute_concreteness(
         # Without repetitions (unique lemmas, f=1)
         score_nr, count_nr = _compute_pos_score_norep(
             word_forms, nouns, prefixes, exclude_list, legacy,
+            picker=picker, context=context_tokens, text=text,
         )
         s_nr = float(score_nr or 0.0)
         c_nr = int(count_nr or 0)

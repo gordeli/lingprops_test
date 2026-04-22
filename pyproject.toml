@@ -22,6 +22,14 @@ dependencies = [
     "scipy>=1.9",
     "nltk>=3.8",
     "tqdm>=4.60",
+    "openpyxl>=3.0",
+    "xlrd>=2.0",
+]
+
+[project.optional-dependencies]
+# Neural WSD strategy (`compute_concreteness(..., wsd="neural")`)
+neural = [
+    "sentence-transformers>=2.2",
 ]
 
 [project.urls]
@@ -34,3 +42,6 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+lingprops = ["data/*.xls", "data/*.xlsx", "data/*.csv"]

@@ -9,10 +9,12 @@ Utilities for computing linguistic properties of text in Python — starting wit
 ---
 
 ## ✨ Features
-- Clean API: `compute_concreteness(text)` — per-POS and total scores, with and without repetitions, computed in a single call
+- `compute_concreteness(text)` — WordNet hypernym-depth concreteness, per-POS and total, with and without repetitions
+- `compute_tangibility(text)` — BWK (Brysbaert et al. 2014) human-rated concreteness norms (1–5 scale), per-POS and total, with and without repetitions
 - `count_words(text)` — standalone word counts by POS category
 - POS independence: nouns, verbs, adjectives, and adverbs are scored as fully separate partitions (frequencies and deduplication are within-POS only)
-- Normalized concreteness: raw score divided by the count of words with non-zero contribution
+- Normalised scores: divided by the count of words with non-zero contribution
+- Pluggable word-sense disambiguation: `wsd="first"` (default), `"lesk"`, or `"neural"`
 - Robust NLTK resource bootstrap via `ensure_nltk_data()`
 - Command-line interface: `python -m lingprops.scripts.concreteness_cli --text "..."`
 - Tests included
@@ -75,7 +77,7 @@ This fetches: `wordnet`, `omw-1.4`, `punkt` (and `punkt_tab` if available), `ave
 
 ### Python
 ```python
-from lingprops import compute_concreteness, count_words
+from lingprops import compute_concreteness, compute_tangibility, count_words
 
 r = compute_concreteness("The cat chased the cat quickly.")
 
@@ -108,6 +110,45 @@ Same fields (`score`, `count`, `normalized_score`, `score_norep`, `count_norep`,
 lemma deduplication are strictly within-POS. The no-repetitions mode deduplicates
 by lemma (before nounification): "cats" and "cat" are one lemma; "big" and "large"
 are two.
+
+### Word-sense disambiguation (WSD)
+
+Concreteness depth depends on which WordNet synset is selected for each noun.
+`compute_concreteness` exposes a `wsd=` option to control that selection:
+
+```python
+compute_concreteness(text)                    # default: wsd="first"
+compute_concreteness(text, wsd="lesk")        # Lesk gloss-overlap + MFS fallback
+compute_concreteness(text, wsd="neural")      # sentence-transformer matching
+```
+
+| Strategy | Uses context? | Extra deps | Relative CPU cost | When to use |
+|---|---|---|---|---|
+| `"first"` (default) | no  | none                    | 1×    | Maximum speed, reproduces the original paper's numbers |
+| `"lesk"`            | yes | none (stdlib NLTK)      | ~2×   | Context-aware at negligible extra cost — recommended for new analyses |
+| `"neural"`          | yes | `sentence-transformers` | ~100× (CPU) | Highest accuracy; install with `pip install lingprops[neural]` |
+
+Rough throughput on a single CPU thread for 100-word texts (~19 nouns each):
+`first` ≈ 0.2 ms/text, `lesk` ≈ 0.4 ms/text, `neural` ≈ 20 ms/text. With 28
+threads (e.g. `ProcessPoolExecutor`), 100 k texts take ≲1 s for `first`/`lesk`
+and ~1 min for `neural`. See `benchmark_wsd.py` for the full comparison.
+
+> **Reproducibility:** `wsd="first"` preserves the library's original
+> (context-free) behaviour exactly — so results from prior publications
+> using this package remain reproducible without any change. Use `"lesk"`
+> or `"neural"` only when you want to **improve** sense selection in new work.
+
+### Tangibility (BWK ratings)
+```python
+t = compute_tangibility("The cat sat on the wooden mat.")
+
+t["total"]["normalized_score"]        # avg BWK rating (1-5), with repetitions
+t["total"]["normalized_score_norep"]  # avg BWK rating, unique lemmas only
+t["NN"]["normalized_score"]           # nouns only
+```
+
+Uses the Brysbaert, Warriner & Kuperman (2014) concreteness norms (~40K words).
+Same per-POS independence and with/without-repetitions design as `compute_concreteness`.
 
 ### CLI
 ```bash

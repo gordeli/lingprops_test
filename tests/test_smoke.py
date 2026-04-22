@@ -1,3 +1,5 @@
+import pytest
+
 from lingprops import compute_concreteness, compute_tangibility, count_words
 
 
@@ -79,3 +81,42 @@ def test_tangibility_empty():
     out = compute_tangibility("")
     assert out["total"]["score"] == 0.0
     assert out["total"]["count"] == 0
+
+
+# --- WSD strategy tests ---
+
+TEXT = ("The pitcher threw the ball across the field. "
+        "Players on the bench watched the game closely.")
+
+
+def test_wsd_default_is_first():
+    """Default wsd='first' matches calling with no wsd argument."""
+    a = compute_concreteness(TEXT)
+    b = compute_concreteness(TEXT, wsd="first")
+    assert a["NN"]["score"] == b["NN"]["score"]
+    assert a["total"]["normalized_score"] == b["total"]["normalized_score"]
+
+
+def test_wsd_lesk_runs():
+    """Lesk+MFS strategy runs and yields the same normalization count."""
+    base = compute_concreteness(TEXT, wsd="first")
+    out = compute_concreteness(TEXT, wsd="lesk")
+    # Sanity: same text -> same token/noun partitioning; counts are identical
+    assert out["NN"]["count"] == base["NN"]["count"]
+    assert out["total"]["word_count"] == base["total"]["word_count"]
+    # Scores are allowed to differ (different synsets may be picked)
+    assert isinstance(out["NN"]["normalized_score"], float)
+
+
+def test_wsd_invalid_raises():
+    with pytest.raises(ValueError):
+        compute_concreteness(TEXT, wsd="not-a-strategy")
+
+
+def test_wsd_neural_optional():
+    """Neural strategy: skip gracefully if the optional dep is missing."""
+    pytest.importorskip("sentence_transformers")
+    base = compute_concreteness(TEXT, wsd="first")
+    out = compute_concreteness(TEXT, wsd="neural")
+    assert out["NN"]["count"] == base["NN"]["count"]
+    assert out["total"]["word_count"] == base["total"]["word_count"]
