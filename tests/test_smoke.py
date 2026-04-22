@@ -1,4 +1,4 @@
-from lingprops import compute_concreteness, count_words
+from lingprops import compute_concreteness, compute_tangibility, count_words
 
 
 def test_smoke():
@@ -37,4 +37,45 @@ def test_empty_text():
     out = compute_concreteness("")
     assert out["total"]["score"] == 0.0
     assert out["total"]["normalized_score"] == 0.0
+    assert out["total"]["count"] == 0
+
+
+# --- Tangibility (BWK) tests ---
+
+def test_tangibility_smoke():
+    out = compute_tangibility("The cat sat on the mat.")
+    assert "total" in out
+    assert out["total"]["count"] > 0
+    # BWK ratings are on a 1-5 scale
+    assert 1.0 <= out["total"]["normalized_score"] <= 5.0
+
+
+def test_tangibility_norep_fields():
+    out = compute_tangibility("Cats chase mice. Dogs sleep.")
+    for pos in ("NN", "VB", "total"):
+        assert "score_norep" in out[pos]
+        assert "count_norep" in out[pos]
+        assert "normalized_score_norep" in out[pos]
+
+
+def test_tangibility_concrete_vs_abstract():
+    concrete = compute_tangibility("The big red truck drove past the wooden fence.")
+    abstract = compute_tangibility("Freedom and justice require constant vigilance.")
+    assert concrete["total"]["normalized_score"] > abstract["total"]["normalized_score"]
+
+
+def test_tangibility_repetitions():
+    out = compute_tangibility("The dog ran. The dog ran. The dog ran.")
+    # With rep: 3 dog + 3 ran = 6 tokens
+    # Without rep: 1 dog + 1 ran = 2 unique lemmas
+    assert out["total"]["count"] == 6
+    assert out["total"]["count_norep"] == 2
+    # Average should be the same (same words repeated)
+    assert abs(out["total"]["normalized_score"] -
+               out["total"]["normalized_score_norep"]) < 1e-10
+
+
+def test_tangibility_empty():
+    out = compute_tangibility("")
+    assert out["total"]["score"] == 0.0
     assert out["total"]["count"] == 0
