@@ -15,7 +15,7 @@ Utilities for computing linguistic properties of text in Python — starting wit
 - POS independence: nouns, verbs, adjectives, and adverbs are scored as fully separate partitions (frequencies and deduplication are within-POS only)
 - Normalised scores: divided by the count of words with non-zero contribution
 - Pluggable word-sense disambiguation: `wsd="first"` (default), `"lesk"`, or `"neural"`
-- Optional automatic named-entity recognition: `ner=True` folds unknown proper nouns (people, organisations, places) into the score via their WordNet category lemma
+- Automatic named-entity recognition (on by default): unknown proper nouns (people, organisations, places) are folded into the score via their WordNet category lemma; pass `ner=False` to disable
 - Robust NLTK resource bootstrap via `ensure_nltk_data()`
 - Command-line interface: `python -m lingprops.scripts.concreteness_cli --text "..."`
 - Tests included
@@ -142,16 +142,17 @@ and ~1 min for `neural`. See `benchmark_wsd.py` for the full comparison.
 ### Named-entity recognition (NER)
 
 Proper nouns not in WordNet (personal names like *Alice*, brand names
-like *Microsoft*, place names like *Obama*) drop silently out of the
-default concreteness score. The library historically compensated with
-a hand-curated list (e.g. `kevin → person`). Passing `ner=True`
-generalises that rule: any entity the NER tagger recognises is
+like *Microsoft*, or arbitrary place names) would otherwise drop
+silently out of the concreteness score. The library historically
+compensated with a hand-curated list (e.g. `kevin → person`). NER is
+now **on by default**: any entity the NER tagger recognises is
 substituted with the lemma of its category, and depth is computed by
 the NNP rule as `1 + depth(category)`.
 
 ```python
-compute_concreteness(text, ner=True)                   # NLTK ne_chunk (default)
-compute_concreteness(text, ner=True, ner_backend="spacy")  # spaCy (more accurate)
+compute_concreteness(text)                              # ner=True, NLTK ne_chunk (default)
+compute_concreteness(text, ner_backend="spacy")         # spaCy (more accurate)
+compute_concreteness(text, ner=False)                   # reproduce pre-NER numbers
 ```
 
 Entity-label → WordNet-lemma mapping (see `lingprops/ner.py`):
@@ -174,6 +175,12 @@ therapist`, ...) also keep precedence over NER.
 **Backends:** `ner_backend="auto"` prefers spaCy (if `en_core_web_sm`
 is installed) and falls back to NLTK. NLTK is bundled; spaCy requires
 `pip install spacy && python -m spacy download en_core_web_sm`.
+
+> **Reproducibility with prior work:** pass `ner=False` **and** `wsd="first"`
+> (both old defaults) to reproduce numbers from the original library
+> exactly. The new defaults (`ner=True`, `wsd="first"`) match the paper
+> on the noun-depth formula but additionally resolve OOV proper nouns
+> through NER, which typically nudges scores upward where names appear.
 
 ### Tangibility (BWK ratings)
 ```python

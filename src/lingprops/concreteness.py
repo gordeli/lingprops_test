@@ -13,7 +13,7 @@ from . import ner as _ner
 DEFAULT_POS_GROUPS: Tuple[str, ...] = ("NN", "VB", "JJ", "RB", "CD")
 DEFAULT_WSD: str = "first"
 WSD_CHOICES: Tuple[str, ...] = ("first", "lesk", "neural")
-DEFAULT_NER: bool = False
+DEFAULT_NER: bool = True
 NER_BACKENDS: Tuple[str, ...] = ("auto", "nltk", "spacy")
 
 # Mapping from POS group labels to the Penn Treebank tag prefixes they cover
@@ -277,15 +277,17 @@ def compute_concreteness(
         uses a sentence-transformer to match the context against each
         candidate gloss (requires ``pip install lingprops[neural]``).
         See :mod:`lingprops.wsd` for details and benchmark numbers.
-    ner : bool, default False
-        If ``True``, run named-entity recognition over the text and
-        substitute any proper noun **not already in WordNet** with the
+    ner : bool, default True
+        If ``True`` (default), run named-entity recognition over the text
+        and substitute any proper noun **not already in WordNet** with the
         lemma of its category (``PERSON → person``, ``ORG → organization``,
         ``GPE → country``, etc.).  Depth is then computed via the existing
         NNP rule as ``1 + depth(category)`` — the same behaviour the
         library's hand-curated list already applies to known brand/person
         names (e.g. ``kevin → person``), generalised to any detected
-        entity.  See :mod:`lingprops.ner` for the label mapping.
+        entity.  Pass ``ner=False`` to reproduce numbers from prior work
+        that pre-dates this option.  See :mod:`lingprops.ner` for the
+        label mapping.
     ner_backend : {"auto", "nltk", "spacy"}, default "auto"
         NER backend.  ``"auto"`` uses spaCy's ``en_core_web_sm`` if
         installed, otherwise NLTK's ``ne_chunk``.  Only consulted when

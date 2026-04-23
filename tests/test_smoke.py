@@ -124,26 +124,35 @@ def test_wsd_neural_optional():
 
 # --- NER tests ---
 
-def test_ner_default_off_is_noop():
-    """Default ner=False matches ner unset."""
+def test_ner_default_on():
+    """NER is enabled by default; passing ner=True is a no-op."""
     t = "Alice loves ios."
     a = compute_concreteness(t)
-    b = compute_concreteness(t, ner=False)
+    b = compute_concreteness(t, ner=True)
     assert a["NN"]["score"] == b["NN"]["score"]
     assert a["NN"]["count"] == b["NN"]["count"]
 
 
+def test_ner_can_be_disabled():
+    """ner=False restores the pre-NER behaviour for reproducibility."""
+    t = "Alice loves ios."
+    default = compute_concreteness(t)            # ner=True (default)
+    no_ner  = compute_concreteness(t, ner=False)
+    # Alice is OOV: default counts her, no_ner does not.
+    assert default["NN"]["count"] > no_ner["NN"]["count"]
+
+
 def test_ner_picks_up_oov_proper_nouns():
     """A name not in WordNet and not in the manual list should contribute
-    when ner=True."""
+    when NER is on (the default)."""
     # 'Alice' has 0 WordNet synsets and isn't in the legacy manual list,
-    # so it drops out of the baseline score entirely.  With NER it is
-    # tagged as an entity and substituted with a category lemma.
+    # so it drops out when ner=False.  With NER (default) she is tagged
+    # as an entity and substituted with a category lemma.
     t = "Alice loves ios."
-    base = compute_concreteness(t)
-    ner  = compute_concreteness(t, ner=True)
-    assert ner["NN"]["count"] > base["NN"]["count"]
-    assert ner["NN"]["score"] > base["NN"]["score"]
+    without = compute_concreteness(t, ner=False)
+    with_ner = compute_concreteness(t)           # default: ner=True
+    assert with_ner["NN"]["count"] > without["NN"]["count"]
+    assert with_ner["NN"]["score"] > without["NN"]["score"]
 
 
 def test_ner_does_not_override_wordnet_known_words():
@@ -153,12 +162,12 @@ def test_ner_does_not_override_wordnet_known_words():
     # NER must not clobber either.
     t_apple    = "I bought an apple today."
     t_einstein = "Einstein studied physics."
-    a1 = compute_concreteness(t_apple)
-    a2 = compute_concreteness(t_apple, ner=True)
-    e1 = compute_concreteness(t_einstein)
-    e2 = compute_concreteness(t_einstein, ner=True)
-    assert a1["NN"]["score"] == a2["NN"]["score"]
-    assert e1["NN"]["score"] == e2["NN"]["score"]
+    a_off = compute_concreteness(t_apple, ner=False)
+    a_on  = compute_concreteness(t_apple, ner=True)
+    e_off = compute_concreteness(t_einstein, ner=False)
+    e_on  = compute_concreteness(t_einstein, ner=True)
+    assert a_off["NN"]["score"] == a_on["NN"]["score"]
+    assert e_off["NN"]["score"] == e_on["NN"]["score"]
 
 
 def test_ner_person_depth_is_person_plus_one():
@@ -171,7 +180,7 @@ def test_ner_person_depth_is_person_plus_one():
     # 'Barack' and 'Obama' are both OOV (0 WordNet synsets) and are
     # reliably tagged PERSON by NLTK's ne_chunk when used together.
     t = "Barack Obama visited London yesterday."
-    base = compute_concreteness(t)
+    base = compute_concreteness(t, ner=False)
     out  = compute_concreteness(t, ner=True)
 
     expected_delta = 2 * math.log(hyp_num("person", "NNP") + 1)
@@ -182,4 +191,4 @@ def test_ner_person_depth_is_person_plus_one():
 
 def test_ner_invalid_backend_raises():
     with pytest.raises(ValueError):
-        compute_concreteness("Alice.", ner=True, ner_backend="bogus")
+        compute_concreteness("Alice is here.", ner_backend="bogus")
