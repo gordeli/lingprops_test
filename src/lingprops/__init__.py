@@ -12,10 +12,13 @@ from .concreteness import (
     ensure_nltk_data,
     DEFAULT_WSD,
     WSD_CHOICES,
+    DEFAULT_NER,
+    NER_BACKENDS,
 )
 from .exact_count import compute_exact_text_count, compute_exact_text_count_optimized
 from .tangibility import compute_tangibility
 from . import wsd
+from . import ner
 
 __all__ = [
     "compute_concreteness",
@@ -26,6 +29,9 @@ __all__ = [
     "ensure_nltk_data",
     "DEFAULT_WSD",
     "WSD_CHOICES",
+    "DEFAULT_NER",
+    "NER_BACKENDS",
     "wsd",
+    "ner",
 ]
 __version__ = "0.1.0"

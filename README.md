@@ -15,6 +15,7 @@ Utilities for computing linguistic properties of text in Python — starting wit
 - POS independence: nouns, verbs, adjectives, and adverbs are scored as fully separate partitions (frequencies and deduplication are within-POS only)
 - Normalised scores: divided by the count of words with non-zero contribution
 - Pluggable word-sense disambiguation: `wsd="first"` (default), `"lesk"`, or `"neural"`
+- Optional automatic named-entity recognition: `ner=True` folds unknown proper nouns (people, organisations, places) into the score via their WordNet category lemma
 - Robust NLTK resource bootstrap via `ensure_nltk_data()`
 - Command-line interface: `python -m lingprops.scripts.concreteness_cli --text "..."`
 - Tests included
@@ -137,6 +138,42 @@ and ~1 min for `neural`. See `benchmark_wsd.py` for the full comparison.
 > (context-free) behaviour exactly — so results from prior publications
 > using this package remain reproducible without any change. Use `"lesk"`
 > or `"neural"` only when you want to **improve** sense selection in new work.
+
+### Named-entity recognition (NER)
+
+Proper nouns not in WordNet (personal names like *Alice*, brand names
+like *Microsoft*, place names like *Obama*) drop silently out of the
+default concreteness score. The library historically compensated with
+a hand-curated list (e.g. `kevin → person`). Passing `ner=True`
+generalises that rule: any entity the NER tagger recognises is
+substituted with the lemma of its category, and depth is computed by
+the NNP rule as `1 + depth(category)`.
+
+```python
+compute_concreteness(text, ner=True)                   # NLTK ne_chunk (default)
+compute_concreteness(text, ner=True, ner_backend="spacy")  # spaCy (more accurate)
+```
+
+Entity-label → WordNet-lemma mapping (see `lingprops/ner.py`):
+
+| Label | Lemma | Label | Lemma |
+|---|---|---|---|
+| PERSON      | person       | PRODUCT | product  |
+| ORGANIZATION / ORG | organization | EVENT   | event    |
+| GPE         | country      | WORK_OF_ART | creation |
+| LOCATION / LOC | location  | LAW     | law      |
+| FACILITY / FAC | facility  | LANGUAGE | language |
+| NORP        | group        | DATE / TIME | time |
+
+**Guard rail:** the override fires **only when the token has no WordNet
+synsets at all**, so capitalised common nouns (`apple`) and WordNet-known
+instances (`einstein`, `paris`) keep their existing depth. Tokens the
+legacy hand-curated list already handles (`kevin → person`, `pt →
+therapist`, ...) also keep precedence over NER.
+
+**Backends:** `ner_backend="auto"` prefers spaCy (if `en_core_web_sm`
+is installed) and falls back to NLTK. NLTK is bundled; spaCy requires
+`pip install spacy && python -m spacy download en_core_web_sm`.
 
 ### Tangibility (BWK ratings)
 ```python

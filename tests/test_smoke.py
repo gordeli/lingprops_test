@@ -120,3 +120,66 @@ def test_wsd_neural_optional():
     out = compute_concreteness(TEXT, wsd="neural")
     assert out["NN"]["count"] == base["NN"]["count"]
     assert out["total"]["word_count"] == base["total"]["word_count"]
+
+
+# --- NER tests ---
+
+def test_ner_default_off_is_noop():
+    """Default ner=False matches ner unset."""
+    t = "Alice loves ios."
+    a = compute_concreteness(t)
+    b = compute_concreteness(t, ner=False)
+    assert a["NN"]["score"] == b["NN"]["score"]
+    assert a["NN"]["count"] == b["NN"]["count"]
+
+
+def test_ner_picks_up_oov_proper_nouns():
+    """A name not in WordNet and not in the manual list should contribute
+    when ner=True."""
+    # 'Alice' has 0 WordNet synsets and isn't in the legacy manual list,
+    # so it drops out of the baseline score entirely.  With NER it is
+    # tagged as an entity and substituted with a category lemma.
+    t = "Alice loves ios."
+    base = compute_concreteness(t)
+    ner  = compute_concreteness(t, ner=True)
+    assert ner["NN"]["count"] > base["NN"]["count"]
+    assert ner["NN"]["score"] > base["NN"]["score"]
+
+
+def test_ner_does_not_override_wordnet_known_words():
+    """Capitalised common nouns and WordNet-known instances keep the
+    existing depth calculation rather than being re-classified."""
+    # 'apple' is in WordNet (fruit); 'einstein' is a WordNet instance.
+    # NER must not clobber either.
+    t_apple    = "I bought an apple today."
+    t_einstein = "Einstein studied physics."
+    a1 = compute_concreteness(t_apple)
+    a2 = compute_concreteness(t_apple, ner=True)
+    e1 = compute_concreteness(t_einstein)
+    e2 = compute_concreteness(t_einstein, ner=True)
+    assert a1["NN"]["score"] == a2["NN"]["score"]
+    assert e1["NN"]["score"] == e2["NN"]["score"]
+
+
+def test_ner_person_depth_is_person_plus_one():
+    """For detected PERSON tokens not in WordNet, the score delta is
+    exactly ``n * log(1 + depth(person))`` where ``depth(person)`` is the
+    NNP depth of the category lemma."""
+    import math
+    from lingprops._concreteness_legacy import hyp_num
+
+    # 'Barack' and 'Obama' are both OOV (0 WordNet synsets) and are
+    # reliably tagged PERSON by NLTK's ne_chunk when used together.
+    t = "Barack Obama visited London yesterday."
+    base = compute_concreteness(t)
+    out  = compute_concreteness(t, ner=True)
+
+    expected_delta = 2 * math.log(hyp_num("person", "NNP") + 1)
+    actual_delta = out["NN"]["score"] - base["NN"]["score"]
+    assert abs(actual_delta - expected_delta) < 1e-9
+    assert out["NN"]["count"] == base["NN"]["count"] + 2
+
+
+def test_ner_invalid_backend_raises():
+    with pytest.raises(ValueError):
+        compute_concreteness("Alice.", ner=True, ner_backend="bogus")

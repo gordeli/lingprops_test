@@ -8,10 +8,13 @@ from __future__ import annotations
 from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
 from . import wsd as _wsd
+from . import ner as _ner
 
 DEFAULT_POS_GROUPS: Tuple[str, ...] = ("NN", "VB", "JJ", "RB", "CD")
 DEFAULT_WSD: str = "first"
 WSD_CHOICES: Tuple[str, ...] = ("first", "lesk", "neural")
+DEFAULT_NER: bool = False
+NER_BACKENDS: Tuple[str, ...] = ("auto", "nltk", "spacy")
 
 # Mapping from POS group labels to the Penn Treebank tag prefixes they cover
 _POS_TAG_PREFIXES: Dict[str, List[str]] = {
@@ -240,6 +243,8 @@ def compute_concreteness(
     pos_groups: Iterable[str] = DEFAULT_POS_GROUPS,
     exclude: Iterable[str] = (),
     wsd: str = DEFAULT_WSD,
+    ner: bool = DEFAULT_NER,
+    ner_backend: str = "auto",
 ) -> Dict[str, Dict[str, float]]:
     """Compute concreteness metrics for a text.
 
@@ -272,6 +277,19 @@ def compute_concreteness(
         uses a sentence-transformer to match the context against each
         candidate gloss (requires ``pip install lingprops[neural]``).
         See :mod:`lingprops.wsd` for details and benchmark numbers.
+    ner : bool, default False
+        If ``True``, run named-entity recognition over the text and
+        substitute any proper noun **not already in WordNet** with the
+        lemma of its category (``PERSON → person``, ``ORG → organization``,
+        ``GPE → country``, etc.).  Depth is then computed via the existing
+        NNP rule as ``1 + depth(category)`` — the same behaviour the
+        library's hand-curated list already applies to known brand/person
+        names (e.g. ``kevin → person``), generalised to any detected
+        entity.  See :mod:`lingprops.ner` for the label mapping.
+    ner_backend : {"auto", "nltk", "spacy"}, default "auto"
+        NER backend.  ``"auto"`` uses spaCy's ``en_core_web_sm`` if
+        installed, otherwise NLTK's ``ne_chunk``.  Only consulted when
+        ``ner=True``.
 
     Returns
     -------
@@ -302,6 +320,17 @@ def compute_concreteness(
         picker = _wsd.get_picker(wsd)
         import nltk
         context_tokens = nltk.word_tokenize(text) if text else []
+
+    # NER augmentation: detect entities and substitute unresolved proper
+    # nouns with their WordNet category lemma.  This runs *after*
+    # ``noun_lemmas`` so that the hand-curated manual overrides there
+    # still take precedence.
+    if ner and text:
+        from nltk.corpus import wordnet as _wn
+        ner_map = _ner.detect_entities(text, backend=ner_backend)
+        def _in_wordnet(w: str) -> bool:
+            return bool(_wn.synsets(w, "n") or _wn.synsets(w.lower(), "n"))
+        _ner.augment_nouns_with_ner(word_forms, nouns, ner_map, _in_wordnet)
 
     exclude_list = list(exclude)
     results: Dict[str, Dict[str, float]] = {}
