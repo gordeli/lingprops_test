@@ -11,7 +11,7 @@ from . import wsd as _wsd
 from . import ner as _ner
 
 DEFAULT_POS_GROUPS: Tuple[str, ...] = ("NN", "VB", "JJ", "RB", "CD")
-DEFAULT_WSD: str = "first"
+DEFAULT_WSD: str = "lesk"
 WSD_CHOICES: Tuple[str, ...] = ("first", "lesk", "neural")
 DEFAULT_NER: bool = True
 DEFAULT_NER_BACKEND: str = "spacy"
@@ -270,14 +270,18 @@ def compute_concreteness(
         POS prefixes to include.
     exclude : iterable of str, default ()
         Words to exclude from calculation.
-    wsd : {"first", "lesk", "neural"}, default "first"
+    wsd : {"first", "lesk", "neural"}, default "lesk"
         Word-sense disambiguation strategy used to pick the WordNet synset
-        when computing noun depth.  ``"first"`` reproduces the library's
-        original (context-free) behaviour.  ``"lesk"`` uses Lesk
-        gloss-overlap with a Most-Frequent-Sense fallback.  ``"neural"``
-        uses a sentence-transformer to match the context against each
-        candidate gloss (requires ``pip install lingprops[neural]``).
-        See :mod:`lingprops.wsd` for details and benchmark numbers.
+        when computing noun depth.  ``"lesk"`` (default) uses Lesk
+        gloss-overlap with a Most-Frequent-Sense fallback — context-aware
+        at ~2x the cost of ``"first"`` and recommended for most analyses.
+        ``"first"`` reproduces the library's original (context-free)
+        behaviour and is the fastest option.  ``"neural"`` uses a
+        sentence-transformer to match the context against each candidate
+        gloss (requires ``pip install lingprops[neural]``); recommended
+        for small datasets where the ~100x CPU cost is acceptable in
+        exchange for the highest accuracy.  See :mod:`lingprops.wsd` for
+        details and benchmark numbers.
     ner : bool, default True
         If ``True`` (default), run named-entity recognition over the text
         and substitute any proper noun **not already in WordNet** with the

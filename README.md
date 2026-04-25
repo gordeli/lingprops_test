@@ -148,8 +148,42 @@ and ~1 min for `neural`. See `benchmark_wsd.py` for the full comparison.
 
 > **Reproducibility:** `wsd="first"` preserves the library's original
 > (context-free) behaviour exactly — so results from prior publications
-> using this package remain reproducible without any change. Use `"lesk"`
-> or `"neural"` only when you want to **improve** sense selection in new work.
+> using this package remain reproducible by passing `wsd="first"` (and
+> `ner=False`) explicitly. The library default is now `wsd="lesk"`,
+> which is context-aware and recommended for new analyses.
+
+### Choosing parameters by dataset size
+
+The default (`wsd="lesk"`, `ner=True`, `ner_backend="spacy"`) is calibrated
+for medium datasets (10 k – 1 M texts). For other regimes, here is what
+to switch:
+
+| Dataset size | Recommended `wsd` | NER | Why |
+|---|---|---|---|
+| **< 10 k texts** (small)            | `"neural"`              | on  | Highest accuracy; the ~100× CPU cost is acceptable here (~3 min for 10 k texts on a single thread). Best for case studies, paper experiments, or any analysis where each text matters. |
+| **10 k – 1 M** (medium, **default**)| `"lesk"`                | on  | Context-aware sense selection at ~2× the cost of `"first"`. Sub-minute for 100 k on 28 threads. |
+| **1 M – 100 M** (large)             | `"lesk"`                | on  | Same defaults; spaCy NER scales fine (~30 h for 100 M on 28 threads). Switch `ner_backend` to `"nltk"` only if you cannot install the spaCy model. |
+| **> 100 M** (very large)            | `"first"`               | optional | Speed dominates; the synset pick is less consequential at scale than throughput. Disabling NER halves end-to-end time. |
+| **Reproducing prior publications**  | `"first"`               | off | Restores the library's original behaviour exactly. |
+
+**Switching from defaults — examples:**
+
+```python
+# Small dataset, max accuracy
+compute_concreteness(text, wsd="neural")
+
+# Very large dataset, throughput-first
+compute_concreteness(text, wsd="first", ner=False)
+
+# Reproducing the JCR 2023 paper numbers
+compute_concreteness(text, wsd="first", ner=False)
+```
+
+> **Why `lesk` and not `first` as the new default?** Lesk is context-aware
+> (the original always picked the first WordNet synset, abstract or
+> concrete, without looking at the sentence) at only ~2× the cost. For
+> 99% of analyses outside of strict reproductions of prior papers, this
+> is the correct trade-off.
 
 ### Named-entity recognition (NER)
 
@@ -197,10 +231,10 @@ prefers spaCy and falls back to NLTK if the spaCy model isn't installed —
 useful in environments where you can't run the model download.
 
 > **Reproducibility with prior work:** pass `ner=False` **and** `wsd="first"`
-> (both old defaults) to reproduce numbers from the original library
-> exactly. The new defaults (`ner=True`, `wsd="first"`) match the paper
-> on the noun-depth formula but additionally resolve OOV proper nouns
-> through NER, which typically nudges scores upward where names appear.
+> to reproduce numbers from the original library exactly. The current
+> defaults (`ner=True`, `wsd="lesk"`) instead use context-aware sense
+> selection and resolve OOV proper nouns through NER — both typically
+> nudge scores upward where ambiguous nouns or names appear.
 
 ### Tangibility (BWK ratings)
 ```python

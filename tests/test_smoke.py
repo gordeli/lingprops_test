@@ -89,19 +89,19 @@ TEXT = ("The pitcher threw the ball across the field. "
         "Players on the bench watched the game closely.")
 
 
-def test_wsd_default_is_first():
-    """Default wsd='first' matches calling with no wsd argument."""
+def test_wsd_default_is_lesk():
+    """Default wsd='lesk' matches calling with no wsd argument."""
     a = compute_concreteness(TEXT)
-    b = compute_concreteness(TEXT, wsd="first")
+    b = compute_concreteness(TEXT, wsd="lesk")
     assert a["NN"]["score"] == b["NN"]["score"]
     assert a["total"]["normalized_score"] == b["total"]["normalized_score"]
 
 
-def test_wsd_lesk_runs():
-    """Lesk+MFS strategy runs and yields the same normalization count."""
+def test_wsd_first_still_available():
+    """wsd='first' remains available for reproducing pre-WSD-flip results."""
     base = compute_concreteness(TEXT, wsd="first")
-    out = compute_concreteness(TEXT, wsd="lesk")
-    # Sanity: same text -> same token/noun partitioning; counts are identical
+    out  = compute_concreteness(TEXT, wsd="lesk")
+    # Same text -> same token/noun partitioning; counts are identical
     assert out["NN"]["count"] == base["NN"]["count"]
     assert out["total"]["word_count"] == base["total"]["word_count"]
     # Scores are allowed to differ (different synsets may be picked)
