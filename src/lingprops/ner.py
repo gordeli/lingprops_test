@@ -100,6 +100,29 @@ def detect_entities_nltk(text: str) -> Dict[str, str]:
 
 
 _SPACY_NLP = None
+SPACY_MODEL = "en_core_web_sm"
+
+
+def ensure_spacy_model(model: str = SPACY_MODEL) -> None:
+    """Download the spaCy model if it isn't already installed.
+
+    Equivalent to running ``python -m spacy download <model>`` once.
+    Safe to call repeatedly: a no-op when the model is already loadable.
+    """
+    try:
+        import spacy
+    except ImportError as e:
+        raise ImportError(
+            "spaCy is not installed.  Install with:\n"
+            "  pip install spacy"
+        ) from e
+    try:
+        spacy.load(model)
+        return
+    except OSError:
+        pass
+    from spacy.cli import download as _spacy_download
+    _spacy_download(model)
 
 
 def detect_entities_spacy(text: str) -> Dict[str, str]:
@@ -112,15 +135,20 @@ def detect_entities_spacy(text: str) -> Dict[str, str]:
             import spacy
         except ImportError as e:
             raise ImportError(
-                "spaCy backend requires: pip install spacy && "
-                "python -m spacy download en_core_web_sm"
+                "spaCy backend requires spaCy.  Install with:\n"
+                "  pip install spacy\n"
+                "  python -m spacy download en_core_web_sm\n"
+                "or in Python:\n"
+                "  from lingprops.ner import ensure_spacy_model; ensure_spacy_model()"
             ) from e
         try:
-            _SPACY_NLP = spacy.load("en_core_web_sm")
+            _SPACY_NLP = spacy.load(SPACY_MODEL)
         except OSError as e:
             raise RuntimeError(
-                "spaCy model 'en_core_web_sm' not found. Install with:\n"
-                "  python -m spacy download en_core_web_sm"
+                f"spaCy model {SPACY_MODEL!r} not found.  Install with:\n"
+                f"  python -m spacy download {SPACY_MODEL}\n"
+                "or in Python:\n"
+                "  from lingprops.ner import ensure_spacy_model; ensure_spacy_model()"
             ) from e
 
     doc = _SPACY_NLP(text)

@@ -126,7 +126,7 @@ def test_wsd_neural_optional():
 
 def test_ner_default_on():
     """NER is enabled by default; passing ner=True is a no-op."""
-    t = "Alice loves ios."
+    t = "Alice and Bob walked through Central Park."
     a = compute_concreteness(t)
     b = compute_concreteness(t, ner=True)
     assert a["NN"]["score"] == b["NN"]["score"]
@@ -135,7 +135,7 @@ def test_ner_default_on():
 
 def test_ner_can_be_disabled():
     """ner=False restores the pre-NER behaviour for reproducibility."""
-    t = "Alice loves ios."
+    t = "Alice and Bob walked through Central Park."
     default = compute_concreteness(t)            # ner=True (default)
     no_ner  = compute_concreteness(t, ner=False)
     # Alice is OOV: default counts her, no_ner does not.
@@ -146,9 +146,9 @@ def test_ner_picks_up_oov_proper_nouns():
     """A name not in WordNet and not in the manual list should contribute
     when NER is on (the default)."""
     # 'Alice' has 0 WordNet synsets and isn't in the legacy manual list,
-    # so it drops out when ner=False.  With NER (default) she is tagged
-    # as an entity and substituted with a category lemma.
-    t = "Alice loves ios."
+    # so she drops out when ner=False.  With NER (default) she is tagged
+    # as PERSON and substituted with the lemma 'person'.
+    t = "Alice and Bob walked through Central Park."
     without = compute_concreteness(t, ner=False)
     with_ner = compute_concreteness(t)           # default: ner=True
     assert with_ner["NN"]["count"] > without["NN"]["count"]

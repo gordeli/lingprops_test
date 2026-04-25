@@ -24,6 +24,12 @@ dependencies = [
     "tqdm>=4.60",
     "openpyxl>=3.0",
     "xlrd>=2.0",
+    # spaCy is the default backend for `compute_concreteness(..., ner=True)`,
+    # which is on by default.  After install, run once:
+    #   python -m spacy download en_core_web_sm
+    # or in Python:
+    #   from lingprops import ensure_spacy_model; ensure_spacy_model()
+    "spacy>=3.4",
 ]
 
 [project.optional-dependencies]

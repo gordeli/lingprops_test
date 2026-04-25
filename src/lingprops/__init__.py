@@ -13,12 +13,14 @@ from .concreteness import (
     DEFAULT_WSD,
     WSD_CHOICES,
     DEFAULT_NER,
+    DEFAULT_NER_BACKEND,
     NER_BACKENDS,
 )
 from .exact_count import compute_exact_text_count, compute_exact_text_count_optimized
 from .tangibility import compute_tangibility
 from . import wsd
 from . import ner
+from .ner import ensure_spacy_model
 
 __all__ = [
     "compute_concreteness",
@@ -27,9 +29,11 @@ __all__ = [
     "compute_tangibility",
     "count_words",
     "ensure_nltk_data",
+    "ensure_spacy_model",
     "DEFAULT_WSD",
     "WSD_CHOICES",
     "DEFAULT_NER",
+    "DEFAULT_NER_BACKEND",
     "NER_BACKENDS",
     "wsd",
     "ner",
