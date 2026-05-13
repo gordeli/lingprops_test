@@ -103,6 +103,44 @@ _SPACY_NLP = None
 SPACY_MODEL = "en_core_web_sm"
 
 
+def _find_spacy_model_dir(name: str = SPACY_MODEL):
+    """Locate the spaCy model directory by path.
+
+    ``spacy.load(name)`` resolves the model through Python entry points,
+    which are *not* registered inside PyInstaller bundles.  When running
+    frozen we have to fall back to filesystem search.
+
+    Returns the absolute path to the directory containing ``config.cfg``
+    (the actual model data), or ``None`` if not found.
+    """
+    import sys
+    import glob
+    import os
+
+    candidates = []
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        # PyInstaller bundle: model is extracted under _MEIPASS.
+        candidates.append(os.path.join(sys._MEIPASS, name))
+        candidates.append(sys._MEIPASS)
+
+    # Also try importing the package directly: works in normal installs
+    # even if the entry point is missing.
+    try:
+        pkg = __import__(name)
+        candidates.append(os.path.dirname(pkg.__file__))
+    except ImportError:
+        pass
+
+    for root in candidates:
+        if not os.path.isdir(root):
+            continue
+        # Model data sits in a versioned subdir, e.g. en_core_web_sm-3.8.0/
+        for cfg in glob.glob(os.path.join(root, "**", "config.cfg"),
+                             recursive=True):
+            return os.path.dirname(cfg)
+    return None
+
+
 def ensure_spacy_model(model: str = SPACY_MODEL) -> None:
     """Download the spaCy model if it isn't already installed.
 
@@ -144,12 +182,19 @@ def detect_entities_spacy(text: str) -> Dict[str, str]:
         try:
             _SPACY_NLP = spacy.load(SPACY_MODEL)
         except OSError as e:
-            raise RuntimeError(
-                f"spaCy model {SPACY_MODEL!r} not found.  Install with:\n"
-                f"  python -m spacy download {SPACY_MODEL}\n"
-                "or in Python:\n"
-                "  from lingprops.ner import ensure_spacy_model; ensure_spacy_model()"
-            ) from e
+            # Entry-point lookup failed (typical inside PyInstaller bundles).
+            # Locate the model directory directly and load from path.
+            model_dir = _find_spacy_model_dir(SPACY_MODEL)
+            if model_dir is not None:
+                _SPACY_NLP = spacy.load(model_dir)
+            else:
+                raise RuntimeError(
+                    f"spaCy model {SPACY_MODEL!r} not found.  Install with:\n"
+                    f"  python -m spacy download {SPACY_MODEL}\n"
+                    "or in Python:\n"
+                    "  from lingprops.ner import ensure_spacy_model; "
+                    "ensure_spacy_model()"
+                ) from e
 
     doc = _SPACY_NLP(text)
     ents: Dict[str, str] = {}
