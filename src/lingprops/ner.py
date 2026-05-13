@@ -146,6 +146,11 @@ def ensure_spacy_model(model: str = SPACY_MODEL) -> None:
 
     Equivalent to running ``python -m spacy download <model>`` once.
     Safe to call repeatedly: a no-op when the model is already loadable.
+
+    Inside a PyInstaller bundle this is also a no-op when the model
+    files exist on disk -- ``spacy.load(name)`` fails because entry
+    points are not registered, but we don't want to fall through to
+    ``spacy.cli.download`` (slow network round-trip, often hangs).
     """
     try:
         import spacy
@@ -159,6 +164,9 @@ def ensure_spacy_model(model: str = SPACY_MODEL) -> None:
         return
     except OSError:
         pass
+    # Bundled / frozen apps: skip the download when the model is on disk.
+    if _find_spacy_model_dir(model) is not None:
+        return
     from spacy.cli import download as _spacy_download
     _spacy_download(model)
 
