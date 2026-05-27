@@ -57,18 +57,28 @@ def ensure_nltk_data() -> None:
                 pass
 
 
+_LEGACY_MODULE = None  # process-wide cache; see _init_legacy()
+
+
 def _init_legacy():
-    """Ensure NLTK data is present and return a ready-to-use legacy module."""
+    """Ensure NLTK data is present and return a ready-to-use legacy module.
+
+    Cached: initialised once per process. The previous implementation
+    called ``importlib.reload()`` on every invocation, which re-executed
+    the legacy module's ~1300 lines of top-level code (WordNetLemmatizer
+    construction, NLTK lookups, numpy/scipy imports) on every scored
+    text — the dominant per-row overhead when batching many documents.
+    """
+    global _LEGACY_MODULE
+    if _LEGACY_MODULE is not None:
+        return _LEGACY_MODULE
+
     ensure_nltk_data()
-    from importlib import reload
     from . import _concreteness_legacy as legacy
-    try:
-        legacy = reload(legacy)
-    except Exception:
-        pass
     from nltk.corpus import wordnet as wn
-    _ = wn.synsets("dog", pos="n")
+    _ = wn.synsets("dog", pos="n")  # force LazyCorpusLoader
     legacy.wn = wn
+    _LEGACY_MODULE = legacy
     return legacy
 
 
