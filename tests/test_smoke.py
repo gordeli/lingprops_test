@@ -1,6 +1,6 @@
 import pytest
 
-from lingprops import compute_concreteness, compute_tangibility, count_words
+from lingprops import compute_all, compute_concreteness, compute_tangibility, count_words
 
 
 def test_smoke():
@@ -192,3 +192,22 @@ def test_ner_person_depth_is_person_plus_one():
 def test_ner_invalid_backend_raises():
     with pytest.raises(ValueError):
         compute_concreteness("Alice is here.", ner_backend="bogus")
+
+
+# --- compute_all: shared-tokenisation parity ---
+
+@pytest.mark.parametrize("text", [
+    "Cats chase mice. Dogs sleep.",
+    "The big red truck drove past the wooden fence.",
+    "Alice and Bob walked through Central Park yesterday.",
+    "Freedom and justice require constant vigilance from every citizen.",
+    "",  # empty input: both calls must agree on the zero-state
+])
+def test_compute_all_matches_separate_calls(text):
+    """compute_all(text) must be bit-exactly equal to
+    {compute_concreteness(text), compute_tangibility(text)}."""
+    bundled = compute_all(text)
+    conc_solo = compute_concreteness(text)
+    tang_solo = compute_tangibility(text)
+    assert bundled["concreteness"] == conc_solo
+    assert bundled["tangibility"]  == tang_solo

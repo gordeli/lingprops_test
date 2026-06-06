@@ -326,9 +326,32 @@ def compute_concreteness(
         - ``content_word_counts`` – word counts per content POS category.
     """
     legacy = _init_legacy()
-
-    # --- Preprocess ONCE for the entire text ---
     word_forms = legacy.wordformtion(text)
+    return _score_concreteness(
+        text, word_forms, legacy,
+        pos_groups=pos_groups, exclude=exclude,
+        wsd=wsd, ner=ner, ner_backend=ner_backend,
+    )
+
+
+def _score_concreteness(
+    text: str,
+    word_forms,
+    legacy,
+    *,
+    pos_groups: Iterable[str] = DEFAULT_POS_GROUPS,
+    exclude: Iterable[str] = (),
+    wsd: str = DEFAULT_WSD,
+    ner: bool = DEFAULT_NER,
+    ner_backend: str = DEFAULT_NER_BACKEND,
+) -> Dict[str, Dict[str, float]]:
+    """Score concreteness from a pre-computed ``word_forms`` dict.
+
+    Internal: shared between :func:`compute_concreteness` (which tokenises
+    its own text) and :func:`compute_all` (which shares one tokenisation
+    across concreteness + tangibility). Behaviour is identical to inlining
+    this body in :func:`compute_concreteness`.
+    """
     nouns, _ = legacy.noun_lemmas(word_forms)
 
     # WSD setup: `None` picker means "use legacy hyp_num" (the first-synset
@@ -415,3 +438,50 @@ def compute_concreteness(
         "content_word_counts": wc_pos,
     }
     return results
+
+
+def compute_all(
+    text: str,
+    pos_groups: Iterable[str] = DEFAULT_POS_GROUPS,
+    tang_pos_groups: Optional[Iterable[str]] = None,
+    exclude: Iterable[str] = (),
+    wsd: str = DEFAULT_WSD,
+    ner: bool = DEFAULT_NER,
+    ner_backend: str = DEFAULT_NER_BACKEND,
+) -> Dict[str, Dict[str, Dict[str, float]]]:
+    """Compute concreteness and tangibility metrics from one tokenisation.
+
+    Equivalent to calling :func:`compute_concreteness` and
+    :func:`compute_tangibility` separately, but ``legacy.wordformtion``
+    (the sent_tokenize + word_tokenize + POS-tag pass) runs once instead
+    of twice — the dominant per-row cost when both metrics are needed
+    together (e.g. the desktop GUI workflow).
+
+    Parameters mirror the two underlying functions. ``tang_pos_groups``
+    defaults to :data:`tangibility.DEFAULT_POS_GROUPS` (NN, VB, JJ, RB —
+    CD omitted) when ``None``.
+
+    Returns
+    -------
+    dict
+        ``{"concreteness": <compute_concreteness result>,
+           "tangibility":  <compute_tangibility result>}``
+    """
+    from . import tangibility as _tang
+
+    if tang_pos_groups is None:
+        tang_pos_groups = _tang.DEFAULT_POS_GROUPS
+
+    legacy = _init_legacy()
+    word_forms = legacy.wordformtion(text)
+
+    conc = _score_concreteness(
+        text, word_forms, legacy,
+        pos_groups=pos_groups, exclude=exclude,
+        wsd=wsd, ner=ner, ner_backend=ner_backend,
+    )
+    tang = _tang._score_tangibility(
+        word_forms, legacy,
+        pos_groups=tang_pos_groups, exclude=exclude,
+    )
+    return {"concreteness": conc, "tangibility": tang}

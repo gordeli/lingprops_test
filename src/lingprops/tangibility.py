@@ -161,10 +161,26 @@ def compute_tangibility(
     from .concreteness import _init_legacy
 
     legacy = _init_legacy()
+    word_forms = legacy.wordformtion(text)
+    return _score_tangibility(
+        word_forms, legacy, pos_groups=pos_groups, exclude=exclude,
+    )
+
+
+def _score_tangibility(
+    word_forms,
+    legacy,
+    *,
+    pos_groups: Iterable[str] = DEFAULT_POS_GROUPS,
+    exclude: Iterable[str] = (),
+) -> Dict[str, Dict[str, float]]:
+    """Score tangibility from a pre-computed ``word_forms`` dict.
+
+    Internal: shared between :func:`compute_tangibility` and
+    :func:`compute_all`.
+    """
     wnl = legacy.wnl
     bwk = _load_bwk()
-
-    word_forms = legacy.wordformtion(text)
     exclusion_list = set(exclude)
 
     results: Dict[str, Dict[str, float]] = {}
