@@ -355,12 +355,16 @@ def _score_concreteness(
     nouns, _ = legacy.noun_lemmas(word_forms)
 
     # WSD setup: `None` picker means "use legacy hyp_num" (the first-synset
-    # path), which keeps the original code path bit-exact for the default.
-    if wsd == DEFAULT_WSD:
+    # path), which keeps the original ``"first"`` code path bit-exact.
+    # NOTE: this must compare against the literal "first", not DEFAULT_WSD.
+    # When the default was flipped to "lesk" (82cbdc4) the old comparison
+    # ``wsd == DEFAULT_WSD`` silently routed "lesk" to the first-synset path,
+    # so lesk never ran; fixed 2026-09-18.
+    if wsd == "first":
         picker = None
         context_tokens = None
     else:
-        picker = _wsd.get_picker(wsd)
+        picker = _wsd.get_picker(wsd)  # validates the name; raises on unknown
         import nltk
         context_tokens = nltk.word_tokenize(text) if text else []
 

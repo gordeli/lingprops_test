@@ -108,6 +108,48 @@ def test_wsd_first_still_available():
     assert isinstance(out["NN"]["normalized_score"], float)
 
 
+def test_wsd_lesk_is_not_first():
+    """Regression test for the dispatch bug fixed 2026-09-18.
+
+    After the default flipped to "lesk" (82cbdc4), ``_score_concreteness``
+    compared ``wsd == DEFAULT_WSD`` to select the legacy first-synset path,
+    so ``wsd="lesk"`` silently produced first-sense scores.  On this sentence
+    the Lesk picker chooses ``savings_bank.n.02`` (depth 7) for *bank* while
+    first-sense gives ``bank.n.01`` (depth 5), so the noun scores must differ,
+    and the lesk score must match the picker's own choice.
+    """
+    import math
+    import nltk
+    from lingprops import wsd as W
+
+    sentence = "I deposited the cheque at the bank before the loan meeting."
+    first = compute_concreteness(sentence, wsd="first", ner=False)
+    lesk = compute_concreteness(sentence, wsd="lesk", ner=False)
+    assert first["NN"]["count_norep"] == lesk["NN"]["count_norep"]
+    assert first["NN"]["score_norep"] != lesk["NN"]["score_norep"],         "wsd='lesk' produced the first-sense score: the picker was not used"
+
+    # Rebuild the expected difference from the pickers themselves: for every
+    # noun lemma in the sentence, sum log(d+1) under each strategy (f = 1).
+    from lingprops.concreteness import _init_legacy
+    legacy = _init_legacy()
+    word_forms = legacy.wordformtion(sentence)
+    nouns, _ = legacy.noun_lemmas(word_forms)
+    ctx = nltk.word_tokenize(sentence)
+    expected = 0.0
+    changed = 0
+    for (word, tag), lemma in nouns.items():
+        if not tag.startswith("NN") or isinstance(lemma, list):
+            continue
+        d_first = W.depth_from_synset(W.pick_first(lemma, tag), tag)
+        d_lesk = W.depth_from_synset(
+            W.pick_lesk_mfs(lemma, tag, context=ctx, text=sentence), tag)
+        if d_first and d_lesk:
+            expected += math.log(d_lesk + 1) - math.log(d_first + 1)
+            changed += d_first != d_lesk
+    assert changed >= 1  # "bank" (5 -> 7) at least
+    assert abs((lesk["NN"]["score_norep"] - first["NN"]["score_norep"]) - expected) < 1e-9
+
+
 def test_wsd_invalid_raises():
     with pytest.raises(ValueError):
         compute_concreteness(TEXT, wsd="not-a-strategy")
