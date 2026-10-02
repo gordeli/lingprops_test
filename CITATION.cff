@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use lingprops in your research, please cite these works."
 title: "lingprops: Linguistic property utilities (concreteness, etc.)"
-version: "1.0.0"
+version: "1.2.0"
 date-released: 2026-10-02
 repository-code: "https://github.com/gordeli/lingprops_test"
 license: MIT
@@ -15,7 +15,7 @@ preferred-citation:
     - family-names: "Gordeliy"
       given-names: "Ivan"
   title: "lingprops"
-  version: "1.0.0"
+  version: "1.2.0"
   date-released: 2026-10-02
 references:
   - type: article
