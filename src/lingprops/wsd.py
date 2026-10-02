@@ -173,8 +173,14 @@ def depth_from_synset(synset, POS: str) -> int:
     if synset is None:
         return 0
     from ._concreteness_legacy import get_hypernyms
-    if POS == 'NNP':
-        instance_parents = synset.instance_hypernyms()
+    instance_parents = synset.instance_hypernyms()
+    if POS == 'NNP' or instance_parents:
+        # An instance synset ("Boise", "Nile") has no hypernyms of its own,
+        # only instance hypernyms, so measuring its depth directly would give
+        # 0 and the word would be dropped.  Measure the depth of the class it
+        # instantiates and add one, whatever the POS tag says - the tag is
+        # driven by capitalisation, which should not change a word's depth.
+        # (v1.2.1; matches the fallback in _concreteness_legacy.hyp_num.)
         base = instance_parents[0] if instance_parents else synset
         return 1 + len(get_hypernyms(base))
     return len(get_hypernyms(synset))

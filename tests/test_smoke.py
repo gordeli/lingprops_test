@@ -150,6 +150,41 @@ def test_wsd_lesk_is_not_first():
     assert abs((lesk["NN"]["score_norep"] - first["NN"]["score_norep"]) - expected) < 1e-9
 
 
+def test_instance_only_noun_is_not_dropped():
+    """Regression test for v1.2.1.
+
+    Words whose every WordNet sense is an instance (proper names such as
+    "Hawaii") used to be dropped when the tagger labelled them a common noun,
+    which happens whenever the writer does not capitalise them: hyp_num raised
+    UnboundLocalError on the legacy path, and depth_from_synset returned 0 on
+    the lesk/neural path, so the word left both the score and its denominator.
+    Depth must not depend on capitalisation.
+    """
+    from lingprops.concreteness import _init_legacy
+    from lingprops.wsd import depth_from_synset, pick_first
+    legacy = _init_legacy()
+
+    for word in ("hawaii", "boise", "nile"):
+        assert legacy.hyp_num(word, "NN") == legacy.hyp_num(word, "NNP") > 0
+        assert depth_from_synset(pick_first(word, "NN"), "NN") ==                depth_from_synset(pick_first(word, "NNP"), "NNP") > 0
+
+    lower = compute_concreteness("we flew to hawaii last summer", wsd="first", ner=False)
+    upper = compute_concreteness("We flew to Hawaii last summer", wsd="first", ner=False)
+    assert lower["total"]["count_norep"] == upper["total"]["count_norep"]
+    assert abs(lower["total"]["normalized_score_norep"]
+               - upper["total"]["normalized_score_norep"]) < 1e-12
+
+
+def test_entity_counts_in_the_denominator():
+    """`entity` is the only WordNet noun lemma with depth 0 (it is the root of
+    the noun hierarchy). It must contribute 0 to the score but still count as a
+    scored word, so the denominator is not silently reduced."""
+    out = compute_concreteness("The entity moved.", wsd="first", ner=False)
+    assert out["total"]["count_norep"] == 2        # entity + moved
+    from lingprops.concreteness import _init_legacy
+    assert _init_legacy().hyp_num("entity", "NN") == 0
+
+
 def test_wsd_invalid_raises():
     with pytest.raises(ValueError):
         compute_concreteness(TEXT, wsd="not-a-strategy")

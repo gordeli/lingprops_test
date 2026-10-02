@@ -723,24 +723,35 @@ def get_hypernyms(synset):
 
 def hyp_num(noun, POS): # 20200617 added POS option to make sure we pick the right synset (proper none or not)
     synsets = wn.synsets(noun, 'n')
+    synset = None
+    instance_based = (POS == 'NNP')
+
     if POS != 'NNP':
         for s in synsets:
-            if s.instance_hypernyms() != []:
-                continue
-            else:
+            if s.instance_hypernyms() == []:
                 synset = s
                 break
-    else:
+        if synset is None and synsets:
+            # Every sense of this word is an instance - a proper name such as
+            # "Boise" or "Nile" - even though the tagger called it a common
+            # noun, which usually means the writer did not capitalise it.
+            # Fall back to the proper-noun treatment rather than failing, so
+            # that the depth of a word no longer depends on capitalisation.
+            # (v1.2.1; before this, such words raised UnboundLocalError and
+            # were silently dropped from both the score and its denominator.)
+            instance_based = True
+
+    if instance_based:
+        if not synsets:
+            raise ValueError("%r has no WordNet noun senses" % (noun,))
         synset = synsets[0]
         for s in synsets:
-            if s.instance_hypernyms() == []:
-                continue
-            else:
+            if s.instance_hypernyms() != []:
                 synset = s.instance_hypernyms()[0]
                 break
-    # first_s.name().split('.')[1]
+
     hyp_set = get_hypernyms(synset)
-    if POS == 'NNP':
+    if instance_based:
         return 1 + len(hyp_set)
     else:
         return len(hyp_set)
