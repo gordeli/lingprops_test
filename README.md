@@ -14,7 +14,7 @@ Utilities for computing linguistic properties of text in Python — starting wit
 - `count_words(text)` — standalone word counts by POS category
 - POS independence: nouns, verbs, adjectives, and adverbs are scored as fully separate partitions (frequencies and deduplication are within-POS only)
 - Normalised scores: divided by the count of words with non-zero contribution
-- Pluggable word-sense disambiguation: `wsd="first"` (default), `"lesk"`, or `"neural"`
+- Pluggable word-sense disambiguation: `wsd="lesk"` (default), `"first"`, or `"neural"`
 - Automatic named-entity recognition (on by default): unknown proper nouns (people, organisations, places) are folded into the score via their WordNet category lemma; pass `ner=False` to disable
 - Robust NLTK resource bootstrap via `ensure_nltk_data()`
 - Command-line interface: `python -m lingprops.scripts.concreteness_cli --text "..."`

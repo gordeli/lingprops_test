@@ -1,18 +1,22 @@
 cff-version: 1.2.0
 message: "If you use lingprops in your research, please cite these works."
 title: "lingprops: Linguistic property utilities (concreteness, etc.)"
-version: "0.1.0"
+version: "1.0.0"
+date-released: 2026-10-02
+repository-code: "https://github.com/gordeli/lingprops_test"
+license: MIT
 authors:
-  - family-names: "Your"
-    given-names: "Name"
+  - family-names: "Gordeliy"
+    given-names: "Ivan"
+    email: "ivan.gordeliy@edhec.edu"
 preferred-citation:
   type: software
   authors:
-    - family-names: "Your"
-      given-names: "Name"
+    - family-names: "Gordeliy"
+      given-names: "Ivan"
   title: "lingprops"
-  version: "0.1.0"
-  date-released: 2025-11-18
+  version: "1.0.0"
+  date-released: 2026-10-02
 references:
   - type: article
     title: "Been There, Done That: How Episodic and Semantic Memory Affects the Language of Authentic and Fictitious Reviews"
