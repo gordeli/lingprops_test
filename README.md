@@ -80,6 +80,32 @@ NLTK fetches: `wordnet31` (the default hierarchy), `wordnet`, `omw-1.4`,
 `punkt` (and `punkt_tab` if available), `averaged_perceptron_tagger` (and
 `_eng`), `maxent_ne_chunker`, `words`.
 
+### Three concreteness scores, not two
+
+`compute_concreteness` (specificity) and `compute_tangibility` (BWK ratings) are
+computed on the **same word set** — content words, nounified, auxiliaries
+excluded — so that the two constructs can be compared word for word. That makes
+`compute_tangibility` deliberately *not* the Brysbaert score as published
+pipelines compute it.
+
+`compute_bwk_classic` is that published measure: every token found in the BWK
+table, averaged, with repetitions and no POS filtering, so function words and
+auxiliaries count.
+
+```python
+from lingprops import compute_bwk_classic
+compute_bwk_classic("I booked four hotels.")
+# {"score": ..., "count": 4, "tokens": 4, "coverage": 1.0}
+compute_bwk_classic(text, lemmatize=True)   # higher coverage, further from the published pipelines
+```
+
+Against the original authors' own scores, the classic variant correlates r = .92
+with Le et al.'s `bryscore` where the content-word tangibility reaches r = .81
+and sits about 0.43 higher in level. Report whichever answers the question:
+`compute_tangibility` for "does specificity differ from tangibility on identical
+words", `compute_bwk_classic` for "does this replicate the measure the field
+uses".
+
 ### WordNet release
 
 Depths come from **WordNet 3.1** by default (NLTK's `wordnet31` corpus); NLTK's

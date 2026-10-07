@@ -1,6 +1,7 @@
 import pytest
 
-from lingprops import compute_all, compute_concreteness, compute_tangibility, count_words
+from lingprops import (compute_all, compute_bwk_classic, compute_concreteness,
+                       compute_tangibility, count_words)
 
 
 def test_smoke():
@@ -485,3 +486,46 @@ def test_word_count_keeps_auxiliaries_as_words():
                                wsd="first", ner=False)
     assert out["total"]["word_count"] == 5
     assert out["VB"]["count"] == 1  # 'delivered' only; 'was' is auxiliary
+
+
+# --- classic BWK text score (new in 1.4.0) ---
+
+CLASSIC_TEXT = ("I was planning a trip to Italy. We will have two weeks and we have "
+                "booked four hotels.")
+
+
+def test_bwk_classic_counts_function_words():
+    """The published measure averages every rated token, ours only content
+    words — so the classic score must use more words and come out lower."""
+    classic = compute_bwk_classic(CLASSIC_TEXT)
+    ours = compute_tangibility(CLASSIC_TEXT)["total"]
+    assert classic["count"] > ours["count"]
+    assert classic["score"] < ours["normalized_score"]
+    assert 0.0 < classic["coverage"] <= 1.0
+
+
+def test_bwk_classic_matches_a_hand_computed_value():
+    from lingprops.tangibility import _load_bwk
+    bwk = _load_bwk()
+    out = compute_bwk_classic("The the the")
+    assert out["count"] == 3
+    assert out["score"] == pytest.approx(bwk["the"])
+
+
+def test_bwk_classic_excludes_punctuation_from_tokens():
+    out = compute_bwk_classic("Dogs bark . , ! ?")
+    assert out["tokens"] == 2
+
+
+def test_bwk_classic_lemmatise_raises_coverage():
+    plain = compute_bwk_classic(CLASSIC_TEXT)
+    lemma = compute_bwk_classic(CLASSIC_TEXT, lemmatize=True)
+    assert lemma["count"] >= plain["count"]
+    assert lemma["tokens"] == plain["tokens"]
+
+
+def test_bwk_classic_empty():
+    import math
+    out = compute_bwk_classic("")
+    assert math.isnan(out["score"])
+    assert out["count"] == 0 and out["tokens"] == 0

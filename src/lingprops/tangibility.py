@@ -240,3 +240,86 @@ def _score_tangibility(
         ),
     }
     return results
+
+
+# ---------------------------------------------------------------------------
+# Classic BWK text score — the measure as the literature computes it
+# ---------------------------------------------------------------------------
+
+def compute_bwk_classic(text: str, *, lemmatize: bool = False) -> Dict[str, float]:
+    """Brysbaert-style text concreteness, as published pipelines compute it.
+
+    Every token of the text is looked up in the BWK table and the ratings of
+    those found are averaged, **with repetitions and with no POS filtering**:
+    function words, auxiliaries and determiners all count if they are rated
+    (and most frequent words are — ``the`` 1.43, ``of`` 1.67, ``was`` 1.69).
+
+    This is deliberately *not* :func:`compute_tangibility`, which restricts
+    itself to content words so that it is computed on the same word set as the
+    specificity score.  Reproducing the published measure needs this looser
+    definition: against Le et al.'s own ``bryscore`` the all-token variant
+    correlates r = .92, where our content-word tangibility reaches r = .81 and
+    sits 0.43 higher in level (see ``data/bwk_comparison.md`` in the
+    Time_construal_review project).
+
+    Parameters
+    ----------
+    text : str
+        Input text.
+    lemmatize : bool, default False
+        ``False`` reproduces the common implementation: lowercase the token and
+        look it up verbatim.  ``True`` tries the WordNet lemma of the token
+        under each open-class part of speech and takes the first hit, which
+        raises coverage by a few words per text but moves further from the
+        published pipelines.
+
+    Returns
+    -------
+    dict
+        ``score`` – mean BWK rating of the matched tokens (``nan`` if none).
+        ``count`` – number of matched tokens (the denominator).
+        ``tokens`` – number of word tokens considered (punctuation excluded).
+        ``coverage`` – ``count / tokens``.
+
+    Notes
+    -----
+    The BWK release also rates ~2,900 two-word expressions; like the published
+    implementations, this function matches single tokens only.
+    """
+    import math
+    import re
+
+    bwk = _load_bwk()
+    if not text:
+        return {"score": math.nan, "count": 0, "tokens": 0, "coverage": 0.0}
+
+    import nltk
+    from .concreteness import ensure_nltk_data
+    ensure_nltk_data()
+
+    toks = [t.lower() for t in nltk.word_tokenize(text)]
+    toks = [t for t in toks if re.search(r"\w", t)]
+
+    wnl = None
+    if lemmatize:
+        from . import _wordnet
+        wnl = _wordnet.get_lemmatizer()
+
+    ratings = []
+    for t in toks:
+        r = bwk.get(t)
+        if r is None and wnl is not None:
+            for pos in ("n", "v", "a", "r"):
+                r = bwk.get(wnl.lemmatize(t, pos))
+                if r is not None:
+                    break
+        if r is not None:
+            ratings.append(r)
+
+    n = len(ratings)
+    return {
+        "score": (sum(ratings) / n) if n else math.nan,
+        "count": n,
+        "tokens": len(toks),
+        "coverage": (n / len(toks)) if toks else 0.0,
+    }

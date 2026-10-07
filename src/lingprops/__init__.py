@@ -25,7 +25,7 @@ from ._wordnet import (
     wordnet_version,
 )
 from .exact_count import compute_exact_text_count, compute_exact_text_count_optimized
-from .tangibility import compute_tangibility
+from .tangibility import compute_bwk_classic, compute_tangibility
 from . import wsd
 from . import ner
 from .ner import ensure_spacy_model
@@ -35,6 +35,7 @@ __all__ = [
     "compute_concreteness",
     "compute_exact_text_count",
     "compute_exact_text_count_optimized",
+    "compute_bwk_classic",
     "compute_tangibility",
     "count_words",
     "ensure_nltk_data",
@@ -52,4 +53,4 @@ __all__ = [
     "wsd",
     "ner",
 ]
-__version__ = "1.3.0"
+__version__ = "1.4.0"
