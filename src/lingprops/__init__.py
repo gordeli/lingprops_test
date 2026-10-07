@@ -17,6 +17,13 @@ from .concreteness import (
     DEFAULT_NER_BACKEND,
     NER_BACKENDS,
 )
+from ._wordnet import (
+    DEFAULT_WORDNET_VERSION,
+    WORDNET_VERSIONS,
+    installed_wordnet_version,
+    set_wordnet_version,
+    wordnet_version,
+)
 from .exact_count import compute_exact_text_count, compute_exact_text_count_optimized
 from .tangibility import compute_tangibility
 from . import wsd
@@ -37,7 +44,12 @@ __all__ = [
     "DEFAULT_NER",
     "DEFAULT_NER_BACKEND",
     "NER_BACKENDS",
+    "DEFAULT_WORDNET_VERSION",
+    "WORDNET_VERSIONS",
+    "installed_wordnet_version",
+    "set_wordnet_version",
+    "wordnet_version",
     "wsd",
     "ner",
 ]
-__version__ = "0.1.0"
+__version__ = "1.3.0"

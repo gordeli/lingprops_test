@@ -65,6 +65,13 @@ def _extract_entries(text, repetitions, pos_groups, legacy, wn):
     for wf_key in word_forms:
         if wf_key[1][:2] not in postag_prefixes:
             continue
+        # Auxiliary verbs are moved to the 'AU' tag by ``wordformtion``, which
+        # leaves the original (word, VB*) entry at zero.  A wordform that no
+        # longer occurs must not become an entry in either mode: with
+        # repetitions it would contribute a frequency-0 term, and without them
+        # it would be resurrected with frequency 1.
+        if word_forms[wf_key] <= 0:
+            continue
         noun = nouns_dict.get(wf_key)
         if noun is None:
             continue
@@ -390,11 +397,19 @@ def compute_exact_text_count_optimized(
 
     # --- Partition entries by POS category ---
     # Map POS tag prefix to the pos_group label
+    pos_groups = list(pos_groups)
     tag_to_group: dict[str, str] = {}
     for pg in pos_groups:
         if pg == "NN":
             for p in ("NN", "CD"):
                 tag_to_group[p] = "NN"
+        elif pg == "CD" and "NN" in pos_groups:
+            # Cardinals belong to the noun partition, as in
+            # concreteness._score_concreteness.  Without this branch a later
+            # pg == "CD" overwrote tag_to_group["CD"] = "NN" and the per-POS
+            # breakdown disagreed with the main scorer's partitions (the total
+            # was unaffected: _extract_entries filters on a flat prefix list).
+            continue
         else:
             tag_to_group[pg] = pg
 

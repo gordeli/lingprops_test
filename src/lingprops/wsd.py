@@ -44,7 +44,8 @@ def _candidate_synsets(word: str, POS: str):
     For common nouns this drops synsets that have ``instance_hypernyms``
     (proper-noun-like senses); if that leaves nothing, the full list is kept.
     """
-    from nltk.corpus import wordnet as wn
+    from ._wordnet import get_wordnet as _get_wn
+    wn = _get_wn()
     synsets = wn.synsets(word, 'n')
     if not synsets:
         return []

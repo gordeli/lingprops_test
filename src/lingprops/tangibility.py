@@ -100,6 +100,14 @@ def _compute_tang_pos_norep(word_forms, postag_prefixes, wnl, bwk,
     for (word, tag), freq in word_forms.items():
         if tag[:2] not in postag_prefixes:
             continue
+        # A word used only as an auxiliary has been moved to the 'AU' tag by
+        # ``wordformtion``, leaving this entry at zero.  The with-repetitions
+        # path multiplies by ``freq`` and so ignores it; this path does not
+        # look at ``freq`` at all and would otherwise score it once.  Tested
+        # before ``seen_lemmas`` is updated so a genuine later wordform with
+        # the same lemma still counts.
+        if freq <= 0:
+            continue
         wn_pos = _tag_to_wn_pos(tag)
         if wn_pos is None:
             continue
@@ -189,6 +197,7 @@ def _score_tangibility(
     total_score_nr = 0.0
     total_count_nr = 0
 
+    pos_groups = list(pos_groups)
     for pos in pos_groups:
         prefixes = ["NN", "CD"] if pos == "NN" else [pos]
 
@@ -207,6 +216,14 @@ def _score_tangibility(
             "count_norep": c_nr,
             "normalized_score_norep": s_nr / c_nr if c_nr > 0 else 0.0,
         }
+
+        # Cardinals live in the noun partition (see the matching comment in
+        # concreteness._score_concreteness).  DEFAULT_POS_GROUPS here does not
+        # include "CD", so this guard only bites when a caller asks for it
+        # explicitly — but then it must not be added to the totals twice.
+        if pos == "CD" and "NN" in pos_groups:
+            continue
+
         total_score += s
         total_count += c
         total_score_nr += s_nr

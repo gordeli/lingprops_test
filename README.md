@@ -76,8 +76,29 @@ python -m lingprops.scripts.concreteness_cli --text "The quick brown fox."  # NL
 python -m spacy download en_core_web_sm                                      # spaCy model
 ```
 
-NLTK fetches: `wordnet`, `omw-1.4`, `punkt` (and `punkt_tab` if available),
-`averaged_perceptron_tagger` (and `_eng`), `maxent_ne_chunker`, `words`.
+NLTK fetches: `wordnet31` (the default hierarchy), `wordnet`, `omw-1.4`,
+`punkt` (and `punkt_tab` if available), `averaged_perceptron_tagger` (and
+`_eng`), `maxent_ne_chunker`, `words`.
+
+### WordNet release
+
+Depths come from **WordNet 3.1** by default (NLTK's `wordnet31` corpus); NLTK's
+plain `wordnet` corpus is 3.0. Both the hierarchy and the lemmatiser are bound
+to the same release, and the choice is reported so an output file can record it:
+
+```python
+import lingprops
+lingprops.wordnet_version()            # "3.1"  — what is selected
+lingprops.installed_wordnet_version()  # "3.1"  — what the corpus reports
+lingprops.set_wordnet_version("3.0")   # before scoring, to reproduce older runs
+```
+
+`entity.n.01` is the single root of the noun hierarchy in both releases. On a
+random sample of 4,000 noun lemmas present in both, the first-sense ancestor
+count is identical for 99.53 % of them; the 0.47 % that differ move by a mean
+of −0.21 levels. 3.1 has slightly better coverage (117,953 noun lemmas against
+117,798), which also means fewer proper nouns need the NER fallback —
+`obama`, for instance, is in 3.1 but not in 3.0.
 
 > **Skipping spaCy?** Pass `ner_backend="nltk"` (slower, lower accuracy) or
 > `ner=False` (no NER at all). The library will still work, but the default
@@ -107,12 +128,12 @@ r["NN"]["normalized_score_norep"]
 # --- Total across all POS ---
 r["total"]["normalized_score"]        # with repetitions
 r["total"]["normalized_score_norep"]  # without repetitions
-r["total"]["word_count"]              # all tokens in text
+r["total"]["word_count"]              # words in the text (punctuation excluded)
 r["total"]["content_word_counts"]     # {"NN": .., "VB": .., "JJ": .., "RB": .., "CD": ..}
 
 # --- Standalone word counts ---
 count_words("The cat chased the cat quickly.")
-# {"NN": 2, "VB": 1, "JJ": 0, "RB": 1, "CD": 0, "total": 7}
+# {"NN": 2, "VB": 1, "JJ": 0, "RB": 1, "CD": 0, "total": 6}
 ```
 
 Same fields (`score`, `count`, `normalized_score`, `score_norep`, `count_norep`,

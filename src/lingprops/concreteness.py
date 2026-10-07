@@ -9,6 +9,7 @@ from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
 from . import wsd as _wsd
 from . import ner as _ner
+from . import _wordnet
 
 DEFAULT_POS_GROUPS: Tuple[str, ...] = ("NN", "VB", "JJ", "RB", "CD")
 DEFAULT_WSD: str = "lesk"
@@ -38,6 +39,7 @@ def ensure_nltk_data() -> None:
         ("taggers", "averaged_perceptron_tagger"),
         ("taggers", "averaged_perceptron_tagger_eng"),  # newer naming on some builds
         ("corpora", "wordnet"),
+        ("corpora", "wordnet31"),  # WordNet 3.1 — the package default
         ("corpora", "omw-1.4"),
     ]
 
@@ -75,9 +77,10 @@ def _init_legacy():
 
     ensure_nltk_data()
     from . import _concreteness_legacy as legacy
-    from nltk.corpus import wordnet as wn
-    _ = wn.synsets("dog", pos="n")  # force LazyCorpusLoader
-    legacy.wn = wn
+    # Both the hierarchy and the lemmatiser must come from the same WordNet
+    # release; see lingprops._wordnet for why the lemmatiser needs binding too.
+    legacy.wn = _wordnet.get_wordnet()
+    legacy.wnl = _wordnet.get_lemmatizer()
     _LEGACY_MODULE = legacy
     return legacy
 
@@ -104,6 +107,8 @@ def count_words(text: str) -> Dict[str, int]:
     counts: Dict[str, int] = {pos: 0 for pos in _POS_TAG_PREFIXES}
 
     for (word, tag), freq in word_forms.items():
+        if not _is_word(tag):
+            continue
         total += freq
         for pos_label, prefixes in _POS_TAG_PREFIXES.items():
             if any(tag.startswith(p) for p in prefixes):
@@ -112,6 +117,22 @@ def count_words(text: str) -> Dict[str, int]:
 
     counts["total"] = total
     return counts
+
+
+def _is_word(tag: str) -> bool:
+    """Is this token a word, for the purpose of ``word_count``?
+
+    Reproduces the original pipeline's rule (``_concreteness_legacy.process_row``
+    line 1087: ``if wordform[1][0].isalpha()``): the test is on the POS **tag**,
+    not the token, so NN/VB/JJ/RB/CD/PRP$/AU and friends count while the
+    punctuation tags (full stop, comma, colon, brackets, quote marks, $) do
+    not.
+    Up to and including v1.2.1 every tagged token was counted, which inflated
+    reported text lengths by roughly 10-15 % and broke comparability with the
+    original.  Auxiliaries (re-tagged ``AU``) stay counted: they are words, even
+    though they are not scored.
+    """
+    return bool(tag[:1].isalpha())
 
 
 def _tag_to_wn_pos(tag: str):
@@ -228,6 +249,19 @@ def _compute_pos_score_norep(word_forms, nouns, postag_prefixes,
 
     for wordform in word_forms:
         if wordform[1][:2] not in postag_prefixes:
+            continue
+
+        # Skip wordforms that no longer occur in the text.  ``wordformtion``
+        # removes auxiliary verbs by *moving* them: it decrements the original
+        # (word, VB*) entry and adds a (word, 'AU') one, so a word used only as
+        # an auxiliary is left behind with a count of zero.  The
+        # with-repetitions path scores those as log C(d, 0) = 0 and adds 0 to
+        # the denominator, i.e. they are correctly invisible; the f = 1 path
+        # overrides the frequency and so used to resurrect them — scoring
+        # "was"/"has"/"been" as if each had occurred once.  Must be tested
+        # before ``seen_lemmas`` is updated, so that a genuine later wordform
+        # with the same lemma (e.g. "have"/VB after "has"/VBZ) still counts.
+        if word_forms[wordform] <= 0:
             continue
 
         # Lemmatise (before nounification) for deduplication
@@ -373,7 +407,7 @@ def _score_concreteness(
     # ``noun_lemmas`` so that the hand-curated manual overrides there
     # still take precedence.
     if ner and text:
-        from nltk.corpus import wordnet as _wn
+        _wn = _wordnet.get_wordnet()
         ner_map = _ner.detect_entities(text, backend=ner_backend)
         def _in_wordnet(w: str) -> bool:
             return bool(_wn.synsets(w, "n") or _wn.synsets(w.lower(), "n"))
@@ -387,6 +421,7 @@ def _score_concreteness(
     total_count_nr = 0
 
     # --- Compute each POS partition independently ---
+    pos_groups = list(pos_groups)
     for pos in pos_groups:
         prefixes = ["NN", "CD"] if pos == "NN" else [pos]
 
@@ -414,6 +449,18 @@ def _score_concreteness(
             "count_norep": c_nr,
             "normalized_score_norep": s_nr / c_nr if c_nr > 0 else 0.0,
         }
+
+        # Cardinal numbers are scored *inside* the noun partition, exactly as the
+        # original pipeline did (``_concreteness_legacy.process_row`` calls
+        # ``text_depth(text, ['NN', 'CD'], ...)`` and computes no separate CD
+        # partition).  We still report a standalone "CD" entry for inspection,
+        # but adding it to the totals as well counts every spelled-out numeral
+        # twice — which is what happened up to and including v1.2.1, inflating
+        # ``count``/``count_norep`` and deflating the normalised scores on any
+        # text containing words like "two", "three" or "hundred".
+        if pos == "CD" and "NN" in pos_groups:
+            continue
+
         total_score += s
         total_count += c
         total_score_nr += s_nr
@@ -423,6 +470,8 @@ def _score_concreteness(
     wc_total = 0
     wc_pos: Dict[str, int] = {pos: 0 for pos in _POS_TAG_PREFIXES}
     for (word, tag), freq in word_forms.items():
+        if not _is_word(tag):
+            continue
         wc_total += freq
         for pos_label, prefixes in _POS_TAG_PREFIXES.items():
             if any(tag.startswith(p) for p in prefixes):

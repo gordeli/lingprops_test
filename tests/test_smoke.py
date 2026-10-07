@@ -254,16 +254,22 @@ def test_ner_person_depth_is_person_plus_one():
     import math
     from lingprops._concreteness_legacy import hyp_num
 
-    # 'Barack' and 'Obama' are both OOV (0 WordNet synsets) and are
-    # reliably tagged PERSON by NLTK's ne_chunk when used together.
+    # 'Barack' and 'Obama' are reliably tagged PERSON by NLTK's ne_chunk when
+    # used together.  How many of them are OOV is version-dependent: WordNet
+    # 3.1 added obama.n.01, so under 3.1 only 'Barack' needs substituting.
+    from lingprops._wordnet import get_wordnet
+    wn = get_wordnet()
     t = "Barack Obama visited London yesterday."
+    oov = [w for w in ("barack", "obama") if not wn.synsets(w, "n")]
+    assert oov, "test needs at least one out-of-vocabulary PERSON token"
+
     base = compute_concreteness(t, ner=False)
     out  = compute_concreteness(t, ner=True)
 
-    expected_delta = 2 * math.log(hyp_num("person", "NNP") + 1)
+    expected_delta = len(oov) * math.log(hyp_num("person", "NNP") + 1)
     actual_delta = out["NN"]["score"] - base["NN"]["score"]
     assert abs(actual_delta - expected_delta) < 1e-9
-    assert out["NN"]["count"] == base["NN"]["count"] + 2
+    assert out["NN"]["count"] == base["NN"]["count"] + len(oov)
 
 
 def test_ner_invalid_backend_raises():
@@ -288,3 +294,194 @@ def test_compute_all_matches_separate_calls(text):
     tang_solo = compute_tangibility(text)
     assert bundled["concreteness"] == conc_solo
     assert bundled["tangibility"]  == tang_solo
+
+
+# --- cardinal numbers must not be counted twice (fixed after v1.2.1) ---
+
+NUMERAL_TEXT = "I bought two shirts and three hats. Two dogs barked at a hundred birds."
+
+
+def test_cardinals_are_scored_inside_the_noun_partition():
+    """The noun partition keeps numerals, as in the original pipeline, which
+    called text_depth(text, ['NN', 'CD'], ...) and had no CD partition."""
+    out = compute_concreteness(NUMERAL_TEXT, wsd="first", ner=False)
+    nn_only = compute_concreteness(NUMERAL_TEXT, pos_groups=("NN",),
+                                   wsd="first", ner=False)
+    assert out["NN"] == nn_only["NN"]
+    assert out["CD"]["count"] > 0, "test text must contain scoreable numerals"
+    assert out["NN"]["count"] > out["CD"]["count"]
+
+
+def test_cardinals_not_double_counted_in_total():
+    """total must equal NN + VB + JJ + RB; the reported CD partition is a
+    subset of NN and must not be added again."""
+    out = compute_concreteness(NUMERAL_TEXT, wsd="first", ner=False)
+    for key in ("count", "count_norep"):
+        assert out["total"][key] == sum(out[p][key] for p in ("NN", "VB", "JJ", "RB")), key
+        assert out["total"][key] != sum(
+            out[p][key] for p in ("NN", "VB", "JJ", "RB", "CD")
+        ), f"{key} still includes the CD partition twice"
+    for key in ("score", "score_norep"):
+        assert out["total"][key] == pytest.approx(
+            sum(out[p][key] for p in ("NN", "VB", "JJ", "RB"))
+        ), key
+
+
+def test_cd_alone_still_contributes_to_the_total():
+    """Asking for CD without NN must score it — the guard only suppresses the
+    double count, it does not make the partition unusable on its own."""
+    out = compute_concreteness(NUMERAL_TEXT, pos_groups=("CD",),
+                               wsd="first", ner=False)
+    assert out["total"]["count"] == out["CD"]["count"] > 0
+
+
+def test_tangibility_cardinals_not_double_counted():
+    out = compute_tangibility(NUMERAL_TEXT, pos_groups=("NN", "VB", "JJ", "RB", "CD"))
+    assert out["total"]["count"] == sum(
+        out[p]["count"] for p in ("NN", "VB", "JJ", "RB")
+    )
+
+
+# --- auxiliary verbs must stay stripped in the f = 1 path (fixed after v1.2.1) ---
+
+AUX_TEXT = ("I was planning a trip to Italy. It has been 3 years since I was there. "
+            "We will have 2 weeks and we have booked 4 hotels. It was amazing!")
+
+# Here "was" appears ONLY as an auxiliary, so nothing else carries the lemma
+# "be" and the bug changes the verb count rather than just which wordform wins.
+AUX_BITES = "The parcel was delivered yesterday and the box arrived broken."
+
+AUXILIARIES = {
+    "am", "is", "are", "was", "were", "being", "been", "be", "have", "has", "had",
+    "do", "does", "did", "will", "would", "shall", "should", "may", "might",
+    "must", "can", "could",
+}
+
+
+def _zero_count_wordforms(text):
+    """Wordforms left at frequency <= 0 because every occurrence was auxiliary."""
+    from lingprops.concreteness import _init_legacy
+    legacy = _init_legacy()
+    wf = legacy.wordformtion(text)
+    return {k for k, v in wf.items() if v <= 0}
+
+
+def test_wordformtion_leaves_zero_count_auxiliaries():
+    """Guard for the premise of the next tests: the legacy tokeniser really
+    does leave (word, VB*) entries behind at zero when it moves a word to AU."""
+    zeros = _zero_count_wordforms(AUX_TEXT)
+    assert zeros, "test text no longer produces a zero-count auxiliary"
+    assert all(w in AUXILIARIES for w, _tag in zeros)
+
+
+def test_norep_does_not_resurrect_zero_count_auxiliaries():
+    """The f = 1 path must not score a wordform that no longer occurs.
+
+    In AUX_BITES "was" occurs only as an auxiliary, so ``wordformtion`` leaves
+    ('was','VBD') at zero.  Before the fix the f = 1 path scored it anyway and
+    the verb partition came out as 3 unique verbs (was, delivered, arrived)
+    instead of 2 — a 50 % inflation of its denominator.
+    """
+    out = compute_concreteness(AUX_BITES, wsd="first", ner=False)
+
+    # Recompute the verb partition by hand, with and without the guard.
+    from lingprops.concreteness import (_init_legacy, _score_wordform,
+                                        _tag_to_wn_pos)
+    legacy = _init_legacy()
+    wf = legacy.wordformtion(AUX_BITES)
+    nouns, _ = legacy.noun_lemmas(wf)
+
+    def verb_partition(skip_zero):
+        seen, score, count = set(), 0.0, 0
+        for w in wf:
+            if w[1][:2] != "VB":
+                continue
+            if skip_zero and wf[w] <= 0:
+                continue
+            p = _tag_to_wn_pos(w[1])
+            lemma = legacy.wnl.lemmatize(w[0], p) if p else w[0]
+            if lemma in seen:
+                continue
+            seen.add(lemma)
+            delta, ok = _score_wordform(w, wf, nouns, 1, [], legacy)
+            if ok:
+                score += delta
+                count += 1
+        return score, count
+
+    fixed, buggy = verb_partition(True), verb_partition(False)
+    assert buggy[1] == fixed[1] + 1, "test text must exercise the bug"
+    assert fixed[1] == 2
+    assert out["VB"]["count_norep"] == fixed[1]
+    assert out["VB"]["score_norep"] == pytest.approx(fixed[0])
+
+
+def test_norep_still_counts_a_verb_used_as_both_main_and_auxiliary():
+    """'was' occurs twice as an auxiliary and once as a copula here, so it
+    survives with a positive count and must still be scored."""
+    wf_zeros = {w for w, _t in _zero_count_wordforms(AUX_TEXT)}
+    assert "was" not in wf_zeros
+    out = compute_concreteness(AUX_TEXT, wsd="first", ner=False)
+    assert out["VB"]["count_norep"] > 0
+
+
+def test_tangibility_norep_skips_zero_count_auxiliaries():
+    out = compute_tangibility(AUX_TEXT)
+    with_aux = compute_tangibility("I was planning a trip to Italy.")
+    assert out["VB"]["count_norep"] > 0
+    assert with_aux["total"]["count_norep"] > 0
+
+
+# --- WordNet release selection (new in 1.3.0) ---
+
+def test_default_wordnet_is_31():
+    import lingprops
+    assert lingprops.wordnet_version() == "3.1"
+    assert lingprops.installed_wordnet_version() == "3.1"
+
+
+def test_entity_is_the_only_noun_root_in_both_releases():
+    """The measure takes a depth from the root, which presupposes one root."""
+    from lingprops._wordnet import get_wordnet
+    for version in ("3.0", "3.1"):
+        wn = get_wordnet(version)
+        roots = [s.name() for s in wn.all_synsets("n")
+                 if not s.hypernyms() and not s.instance_hypernyms()]
+        assert roots == ["entity.n.01"], (version, roots)
+
+
+def test_lemmatiser_is_bound_to_the_same_release():
+    """Depths and lemmas must not come from different WordNet releases."""
+    from lingprops.concreteness import _init_legacy
+    from lingprops._wordnet import wordnet_version
+    legacy = _init_legacy()
+    assert legacy.wn.get_version() == wordnet_version()
+    assert legacy.wnl._wn is legacy.wn
+    assert legacy.wnl.lemmatize("hotels", "n") == "hotel"
+    assert legacy.wnl.lemmatize("was", "v") == "be"
+
+
+def test_wordnet_version_switch_is_validated():
+    import pytest as _pytest
+    from lingprops import set_wordnet_version, wordnet_version
+    with _pytest.raises(ValueError):
+        set_wordnet_version("2.9")
+    assert wordnet_version() == "3.1"
+
+
+# --- word_count excludes punctuation (fixed after v1.2.1) ---
+
+def test_word_count_excludes_punctuation():
+    """Reproduces the original rule: the POS tag must start with a letter."""
+    t = "I was planning a trip to Italy. It has been 3 years since I was there."
+    assert count_words(t)["total"] == len(t.split())
+    out = compute_concreteness(t, wsd="first", ner=False)
+    assert out["total"]["word_count"] == len(t.split())
+
+
+def test_word_count_keeps_auxiliaries_as_words():
+    """Auxiliaries are re-tagged AU and are not scored, but they are words."""
+    out = compute_concreteness("The parcel was delivered yesterday.",
+                               wsd="first", ner=False)
+    assert out["total"]["word_count"] == 5
+    assert out["VB"]["count"] == 1  # 'delivered' only; 'was' is auxiliary
